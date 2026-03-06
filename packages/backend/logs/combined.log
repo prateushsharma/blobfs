@@ -6,3 +6,6 @@
 2026-03-06T19:14:18.195Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
 2026-03-06T19:14:18.195Z [INFO] BlobKit initialized 
 2026-03-06T19:14:18.197Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:17:00.625Z [INFO] metric {"type":"read","size":0,"duration":1150,"success":false,"source":"error"}
+2026-03-06T19:17:00.625Z [ERROR] BlobKit error {"context":"readBlob","error":"could not coalesce error (error={ \"code\": -32602, \"message\": \"data types must start with 0x\" }, payload={ \"id\": 2, \"jsonrpc\": \"2.0\", \"method\": \"eth_getTransactionByHash\", \"params\": [ \"gas\" ] }, code=UNKNOWN_ERROR, version=6.16.0)"}
+2026-03-06T19:17:00.625Z [ERROR] Blob read failed {"error":"could not coalesce error (error={ \"code\": -32602, \"message\": \"data types must start with 0x\" }, payload={ \"id\": 2, \"jsonrpc\": \"2.0\", \"method\": \"eth_getTransactionByHash\", \"params\": [ \"gas\" ] }, code=UNKNOWN_ERROR, version=6.16.0)"}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useAccount, useWalletClient } from 'wagmi';
-import { parseEther, formatEther } from 'viem';
+import { formatEther } from 'viem';
 import { getDataset, DatasetMeta } from '../api/datasets';
 import { verifyLicense, purchaseLicense, LicenseReceipt } from '../api/licenses';
 
@@ -35,17 +35,14 @@ export default function DatasetDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // License state
   const [license, setLicense] = useState<LicenseReceipt | null>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
 
-  // Purchase state
   const [step, setStep] = useState<PurchaseStep>('idle');
   const [stepMsg, setStepMsg] = useState('');
   const [receiptTxHash, setReceiptTxHash] = useState('');
   const [purchaseError, setPurchaseError] = useState('');
 
-  // Load dataset
   useEffect(() => {
     if (!id) return;
     getDataset(id)
@@ -54,7 +51,6 @@ export default function DatasetDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Check existing license
   useEffect(() => {
     if (!id || !address || !dataset) return;
     setLicenseLoading(true);
@@ -73,25 +69,20 @@ export default function DatasetDetail() {
     setStepMsg('Sending ETH payment to LicenseMarket contract...');
 
     try {
-      // Step 1: Send ETH to LicenseMarket contract
       const paymentTxHash = await walletClient.sendTransaction({
         to: LICENSE_MARKET_ADDRESS,
         value: BigInt(dataset.priceWei),
-        data: ('0x' +
-          // purchaseDataset(uint256 datasetId) selector + encoded id
-          encodePurchaseCall(dataset.id)) as `0x${string}`,
+        data: ('0x' + encodePurchaseCall(dataset.id)) as `0x${string}`,
       });
 
       setStep('waiting-confirmation');
-      setStepMsg(`Payment sent. Waiting for Ethereum confirmation...`);
+      setStepMsg('Payment sent. Waiting for Ethereum confirmation...');
 
-      // Step 2: Poll until tx confirmed (simple block wait)
       await waitForTx(paymentTxHash);
 
       setStep('issuing-receipt');
       setStepMsg('Payment confirmed. Writing license receipt to blobspace...');
 
-      // Step 3: Backend issues receipt blob
       const { receiptTxHash: rth } = await purchaseLicense({
         datasetId: dataset.id,
         buyerAddress: address,
@@ -102,7 +93,6 @@ export default function DatasetDetail() {
       setStep('done');
       setStepMsg('');
 
-      // Reload license
       const { licensed, receipt } = await verifyLicense(dataset.id, address);
       if (licensed && receipt) setLicense(receipt);
     } catch (e: any) {
@@ -112,7 +102,6 @@ export default function DatasetDetail() {
     }
   }
 
-  // Loading & error states
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -139,8 +128,6 @@ export default function DatasetDetail() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
       <div className="max-w-4xl mx-auto">
-
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xs border border-[#00ffcc] text-[#00ffcc] rounded px-2 py-0.5 font-['Space_Mono'] uppercase">
@@ -155,11 +142,7 @@ export default function DatasetDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Left: metadata */}
           <div className="lg:col-span-2 space-y-4">
-
-            {/* On-chain info */}
             <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40">
               <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4">
                 On-Chain Data
@@ -174,13 +157,14 @@ export default function DatasetDetail() {
                 <Row
                   label="Published"
                   value={new Date(dataset.createdAt * 1000).toLocaleDateString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
                   })}
                 />
               </div>
             </div>
 
-            {/* Receipt (if licensed) */}
             {license && (
               <div className="border border-[#00ffcc]/30 rounded-lg p-5 bg-[#00ffcc]/5">
                 <h2 className="font-['Syne'] text-sm font-semibold text-[#00ffcc] uppercase tracking-wider mb-4">
@@ -195,17 +179,16 @@ export default function DatasetDetail() {
                   />
                   <Row label="License Type" value={license.licenseType} />
                 </div>
-                
-                  href={`/verify/${license.receiptTxHash}`}
+                <Link
+                  to={`/verify/${license.receiptTxHash}`}
                   className="mt-4 inline-block text-xs text-[#00ffcc] font-['Space_Mono'] hover:underline"
                 >
                   → Verify receipt on-chain
-                </a>
+                </Link>
               </div>
             )}
           </div>
 
-          {/* Right: purchase panel */}
           <div className="space-y-4">
             <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/60 sticky top-6">
               <div className="mb-5">
@@ -215,7 +198,6 @@ export default function DatasetDetail() {
                 </p>
               </div>
 
-              {/* Already licensed */}
               {licenseLoading && (
                 <p className="text-zinc-500 font-['Space_Mono'] text-xs mb-4 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse" />
@@ -229,7 +211,7 @@ export default function DatasetDetail() {
                     <span className="w-2 h-2 rounded-full bg-[#00ffcc]" />
                     Licensed
                   </div>
-                  
+                  <a
                     href={`/api/datasets/${dataset.id}/download`}
                     download
                     className="block w-full text-center bg-[#00ffcc] text-black font-['Space_Mono'] text-sm font-bold py-3 rounded hover:bg-[#00ffcc]/90 transition-colors"
@@ -239,14 +221,12 @@ export default function DatasetDetail() {
                 </div>
               )}
 
-              {/* Owner */}
               {isOwner && !license && (
                 <div className="text-amber-400 font-['Space_Mono'] text-xs mb-4 border border-amber-800 rounded p-3">
                   You published this dataset.
                 </div>
               )}
 
-              {/* Purchase flow */}
               {!license && !isOwner && (
                 <>
                   {!isConnected && (
@@ -264,7 +244,6 @@ export default function DatasetDetail() {
                     </button>
                   )}
 
-                  {/* Step progress */}
                   {['sending-payment', 'waiting-confirmation', 'issuing-receipt'].includes(step) && (
                     <div className="space-y-3">
                       <StepIndicator
@@ -304,7 +283,10 @@ export default function DatasetDetail() {
                     <div className="space-y-3">
                       <p className="text-red-400 font-['Space_Mono'] text-xs">⚠ {purchaseError}</p>
                       <button
-                        onClick={() => { setStep('idle'); setPurchaseError(''); }}
+                        onClick={() => {
+                          setStep('idle');
+                          setPurchaseError('');
+                        }}
                         className="w-full border border-zinc-600 text-zinc-300 font-['Space_Mono'] text-xs py-2 rounded hover:border-zinc-400 transition-colors"
                       >
                         Try Again
@@ -314,7 +296,6 @@ export default function DatasetDetail() {
                 </>
               )}
 
-              {/* Protocol fee note */}
               <p className="text-zinc-600 font-['Space_Mono'] text-xs mt-4 pt-4 border-t border-zinc-800">
                 2.5% protocol fee applies. Remainder goes directly to creator.
               </p>
@@ -325,8 +306,6 @@ export default function DatasetDetail() {
     </div>
   );
 }
-
-// ── Sub-components ──────────────────────────────────────────────
 
 function Row({
   label,
@@ -341,7 +320,7 @@ function Row({
     <div className="flex items-start justify-between gap-4">
       <span className="text-zinc-500 shrink-0">{label}</span>
       {hash ? (
-        
+        <a
           href={`https://sepolia.etherscan.io/tx/${value}`}
           target="_blank"
           rel="noreferrer"
@@ -386,20 +365,12 @@ function StepIndicator({
   );
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
-
-// Encode purchaseDataset(uint256) call — simple ABI encoding
 function encodePurchaseCall(datasetId: string): string {
-  // selector: keccak256("purchaseDataset(uint256,string)")[0:4]
-  // We send just the ETH value; contract reads msg.sender + msg.value
-  // If your contract uses a simple payable fallback, send empty data
-  // Adjust selector to match your actual contract signature
-  const selector = 'a8174404'; // purchaseDataset(uint256)
+  const selector = 'a8174404';
   const id = BigInt(datasetId).toString(16).padStart(64, '0');
   return selector + id;
 }
 
-// Poll for tx receipt via window.ethereum
 async function waitForTx(txHash: string, maxAttempts = 30): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, 3000));
