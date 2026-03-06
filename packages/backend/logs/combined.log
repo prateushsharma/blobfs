@@ -30,3 +30,52 @@
 2026-03-06T19:24:48.680Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
 2026-03-06T19:24:48.681Z [INFO] BlobKit initialized 
 2026-03-06T19:24:48.682Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:25:41.529Z [ERROR] Gas estimate failed {"error":"Failed to estimate cost: Cannot convert 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,… to a BigInt"}
+2026-03-06T19:27:10.083Z [ERROR] Upload failed {"error":"Failed to estimate cost: Cannot convert 105,100,44,108,97,98,101,108,92,110,49,44,99,97,116,92,110,50,44,100,111,103,10 to a BigInt"}
+2026-03-06T19:28:58.402Z [INFO] Config validated 
+2026-03-06T19:28:58.405Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:28:58.405Z [INFO] Database initialized 
+2026-03-06T19:28:58.405Z [INFO] Initializing KZG... 
+2026-03-06T19:29:13.842Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:29:14.024Z [INFO] Config validated 
+2026-03-06T19:29:14.027Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:29:14.027Z [INFO] Database initialized 
+2026-03-06T19:29:14.027Z [INFO] Initializing KZG... 
+2026-03-06T19:29:29.575Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:29:30.635Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:29:30.636Z [INFO] BlobKit initialized 
+2026-03-06T19:29:30.637Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:29:36.665Z [ERROR] Upload failed {"error":"Failed to estimate cost: Cannot convert 66,108,111,98,32,102,115,32,116,101,115,116,105,110,103,32,102,105,108,101,10 to a BigInt"}
+2026-03-06T19:30:21.701Z [ERROR] Upload failed {"error":"Failed to estimate cost: Cannot convert 105,100,44,108,97,98,101,108,92,110,49,44,99,97,116,92,110,50,44,100,111,103,10 to a BigInt"}
+2026-03-06T19:31:10.324Z [INFO] Config validated 
+2026-03-06T19:31:10.327Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:31:10.327Z [INFO] Database initialized 
+2026-03-06T19:31:10.327Z [INFO] Initializing KZG... 
+2026-03-06T19:31:25.733Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:31:25.928Z [INFO] Config validated 
+2026-03-06T19:31:25.931Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:31:25.931Z [INFO] Database initialized 
+2026-03-06T19:31:25.931Z [INFO] Initializing KZG... 
+2026-03-06T19:31:41.317Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:31:41.492Z [INFO] Config validated 
+2026-03-06T19:31:41.495Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:31:41.495Z [INFO] Database initialized 
+2026-03-06T19:31:41.496Z [INFO] Initializing KZG... 
+2026-03-06T19:31:56.923Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:31:58.486Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:31:58.486Z [INFO] BlobKit initialized 
+2026-03-06T19:31:58.487Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:32:00.019Z [INFO] Config validated 
+2026-03-06T19:32:00.022Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:32:00.022Z [INFO] Database initialized 
+2026-03-06T19:32:00.022Z [INFO] Initializing KZG... 
+2026-03-06T19:32:15.451Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:32:15.640Z [INFO] Config validated 
+2026-03-06T19:32:15.643Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:32:15.643Z [INFO] Database initialized 
+2026-03-06T19:32:15.643Z [INFO] Initializing KZG... 
+2026-03-06T19:32:30.986Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:32:32.348Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:32:32.348Z [INFO] BlobKit initialized 
+2026-03-06T19:32:32.349Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:32:44.720Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}

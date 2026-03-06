@@ -62,6 +62,10 @@ export async function uploadDataset(
   form.append('priceWei', meta.priceWei);
   form.append('licenseType', meta.licenseType);
 
+  // Send creatorAddress in body as fallback for header
+  const address = localStorage.getItem('walletAddress');
+  if (address) form.append('creatorAddress', address);
+
   const { data } = await api.post('/api/datasets/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (e) => {
@@ -70,7 +74,6 @@ export async function uploadDataset(
   });
   return data;
 }
-
 // POST /api/datasets/publish
 export async function publishDataset(payload: PublishPayload): Promise<{ datasetId: string; txHash: string }> {
   const { data } = await api.post('/api/datasets/publish', payload);

@@ -9,8 +9,7 @@ const router = Router();
 router.get('/gas', async (_req: Request, res: Response) => {
   try {
     const blobkit = await getBlobKit();
-    const sample = new Uint8Array(1024);
-    const estimate = await blobkit.estimateCost(sample);
+    const estimate = await blobkit.estimateCost(1024);  // ← number not Uint8Array
 
     return res.json({
       blobGasPrice: estimate.blobGasPrice,
