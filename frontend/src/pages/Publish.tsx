@@ -124,7 +124,16 @@ export default function Publish() {
       setStep('uploading');
       setUploadProgress(0);
 
-      const result = await uploadDataset(file!, (pct) => setUploadProgress(pct));
+      const result = await uploadDataset(
+  file!,
+  {
+    name: form.name.trim(),
+    description: form.description.trim(),
+    priceWei: BigInt(Math.round(parseFloat(form.priceETH) * 1e18)).toString(),
+    licenseType: form.licenseType,
+  },
+  (pct) => setUploadProgress(pct)
+);
       setUploadResult(result);
 
       setStep('publishing');

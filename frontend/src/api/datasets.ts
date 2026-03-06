@@ -52,10 +52,15 @@ export async function estimateDownload(id: string): Promise<UploadEstimate> {
 // POST /api/datasets/upload  (multipart)
 export async function uploadDataset(
   file: File,
+  meta: { name: string; description: string; priceWei: string; licenseType: string },
   onProgress?: (pct: number) => void
 ): Promise<{ manifestTxHash: string; chunkTxHashes: string[]; fileHash: string; estimatedETH: string }> {
   const form = new FormData();
   form.append('file', file);
+  form.append('name', meta.name);
+  form.append('description', meta.description);
+  form.append('priceWei', meta.priceWei);
+  form.append('licenseType', meta.licenseType);
 
   const { data } = await api.post('/api/datasets/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
