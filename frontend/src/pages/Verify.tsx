@@ -1,348 +1,335 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { readBlob } from '../api/blobs';
+import { verifyLicense, LicenseReceipt } from '../api/licenses';
 
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import axios from 'axios'
-import { BrowserProvider } from 'ethers'
-import { useWalletStore } from '../store/useWalletStore'
+type VerifyState = 'idle' | 'loading' | 'found' | 'invalid' | 'error';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-
-interface Dataset {
-  id: string
-  name: string
-  description: string
-  content_type: string
-  file_size: number
-  chunk_count: number
-  price_wei: string
-  license_type: string
-  creator_address: string
-  manifest_tx_hash: string
-  file_hash: string
-  payload_hash: string
-  created_at: number
-  active: number
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-interface License {
-  licensed: boolean
-  receipt: {
-    type: string
-    buyer: string
-    seller: string
-    amountPaid: string
-    purchasedAt: number
-    receiptTxHash: string
-    licenseType: string
-  } | null
+function formatETH(wei: string): string {
+  return `${(Number(BigInt(wei)) / 1e18).toFixed(6)} ETH`;
 }
 
-function formatSize(bytes: number) {
-  if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' GB'
-  if (bytes >= 1e6) return (bytes / 1e6).toFixed(2) + ' MB'
-  if (bytes >= 1e3) return (bytes / 1e3).toFixed(2) + ' KB'
-  return bytes + ' B'
-}
+export default function Verify() {
+  const { hash } = useParams<{ hash?: string }>();
+  const navigate = useNavigate();
 
-function formatEth(wei: string) {
-  return (Number(BigInt(wei)) / 1e18).toFixed(4)
-}
-
-function short(addr: string) {
-  return addr.slice(0, 6) + '...' + addr.slice(-4)
-}
-
-function timeAgo(ts: number) {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 3600) return Math.floor(diff / 60) + 'm ago'
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'
-  return Math.floor(diff / 86400) + 'd ago'
-}
-
-const MOCK_DATASET: Dataset = {
-  id: '1',
-  name: 'ImageNet Subset 10k',
-  description: '10,000 labeled images across 100 categories for computer vision training. Each image is 224x224px, pre-normalized. Includes train/val/test splits and label metadata in JSON format.',
-  content_type: 'application/zip',
-  file_size: 524288000,
-  chunk_count: 5,
-  price_wei: '5000000000000000',
-  license_type: 'commercial',
-  creator_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77',
-  manifest_tx_hash: '0xabc123def456abc123def456abc123def456abc123def456abc123def456abc123',
-  file_hash: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-  payload_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-  created_at: Date.now() / 1000 - 3600,
-  active: 1,
-}
-
-export default function Dataset() {
-  const { id } = useParams()
-  const { address, isConnected, connect } = useWalletStore()
-
-  const [dataset, setDataset] = useState<Dataset | null>(null)
-  const [license, setLicense] = useState<License | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [purchasing, setPurchasing] = useState(false)
-  const [txStatus, setTxStatus] = useState<'idle' | 'signing' | 'sending' | 'confirming' | 'done' | 'error'>('idle')
-  const [txHash, setTxHash] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [input, setInput] = useState(hash || '');
+  const [state, setState] = useState<VerifyState>(hash ? 'loading' : 'idle');
+  const [receipt, setReceipt] = useState<LicenseReceipt | null>(null);
+  const [rawBlob, setRawBlob] = useState<string>('');
+  const [blobSource, setBlobSource] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      axios.get(API + '/api/datasets/' + id).catch(() => ({ data: { dataset: MOCK_DATASET } })),
-      address
-        ? axios.get(API + '/api/licenses/verify?datasetId=' + id + '&address=' + address).catch(() => ({ data: { licensed: false, receipt: null } }))
-        : Promise.resolve({ data: { licensed: false, receipt: null } }),
-    ]).then(([dRes, lRes]) => {
-      setDataset(dRes.data?.dataset || MOCK_DATASET)
-      setLicense(lRes.data)
-    }).finally(() => setLoading(false))
-  }, [id, address])
+    if (hash) verify(hash);
+  }, [hash]);
 
-  const handlePurchase = async () => {
-    if (!isConnected || !address) { connect(); return }
-    if (!dataset) return
+  async function verify(txHash: string) {
+    const cleaned = txHash.trim();
+    if (!cleaned.startsWith('0x') || cleaned.length < 10) {
+      setState('invalid');
+      setErrorMsg('Invalid transaction hash format.');
+      return;
+    }
 
-    setPurchasing(true)
-    setTxStatus('signing')
-    setErrorMsg('')
+    setState('loading');
+    setReceipt(null);
+    setRawBlob('');
+    setErrorMsg('');
 
     try {
-      const provider = new BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
+      const blob = await readBlob(cleaned);
+      setRawBlob(blob.data);
+      setBlobSource(blob.source);
 
-      setTxStatus('sending')
-      const tx = await signer.sendTransaction({
-        to: dataset.creator_address,
-        value: BigInt(dataset.price_wei),
-      })
+      let parsed: any;
+      try {
+        parsed = JSON.parse(blob.data);
+      } catch {
+        setState('found');
+        return;
+      }
 
-      setTxStatus('confirming')
-      setTxHash(tx.hash)
-      await tx.wait()
+      if (
+        parsed.type === 'blobfs-receipt' &&
+        parsed.datasetId &&
+        parsed.buyer &&
+        parsed.seller
+      ) {
+        try {
+          const { licensed, receipt: r } = await verifyLicense(
+            parsed.datasetId,
+            parsed.buyer
+          );
+          if (licensed && r) {
+            setReceipt(r);
+            setState('found');
+            return;
+          }
+        } catch {}
 
-      await axios.post(API + '/api/licenses/purchase', {
-        datasetId: dataset.id,
-        buyerAddress: address,
-        paymentTxHash: tx.hash,
-      }).catch(() => {})
-
-      setTxStatus('done')
-      setLicense({ licensed: true, receipt: null })
-    } catch (err: any) {
-      setTxStatus('error')
-      setErrorMsg(err?.reason || err?.message || 'Transaction failed')
-    } finally {
-      setPurchasing(false)
+        setReceipt(parsed as LicenseReceipt);
+        setState('found');
+      } else {
+        setState('found');
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Could not read blob');
+      setState('error');
     }
   }
 
-  if (loading) {
-    return (
-      <main className="pt-24 pb-16 px-6 min-h-screen">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-surface rounded w-32" />
-            <div className="h-10 bg-surface rounded w-2/3" />
-            <div className="h-4 bg-surface rounded w-full" />
-          </div>
-        </div>
-      </main>
-    )
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim()) return;
+    navigate(`/verify/${input.trim()}`);
+    verify(input.trim());
   }
-
-  if (!dataset) {
-    return (
-      <main className="pt-24 pb-16 px-6 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="font-mono text-dim">dataset not found</p>
-          <Link to="/marketplace" className="font-mono text-xs text-cyan mt-4 block">
-            back to marketplace
-          </Link>
-        </div>
-      </main>
-    )
-  }
-
-  const isOwner = address?.toLowerCase() === dataset.creator_address.toLowerCase()
-  const isFree = dataset.license_type === 'open' || dataset.price_wei === '0'
 
   return (
-    <main className="pt-24 pb-16 px-6 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-
-        <div className="flex items-center gap-2 mb-8 fade-in">
-          <Link to="/marketplace" className="font-mono text-xs text-dim hover:text-cyan transition-colors">
-            marketplace
-          </Link>
-          <span className="font-mono text-xs text-border">/</span>
-          <span className="font-mono text-xs text-text truncate max-w-xs">{dataset.name}</span>
+    <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
+      <div className="max-w-3xl mx-auto">
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="font-['Syne'] text-4xl font-bold mb-2">
+            Verify <span className="text-[#00ffcc]">Receipt</span>
+          </h1>
+          <p className="text-zinc-400 font-['Space_Mono'] text-sm">
+            Enter a receipt blob TX hash to verify license ownership on Ethereum.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-border fade-in">
+        {/* Search bar */}
+        <form onSubmit={handleSubmit} className="flex gap-3 mb-10">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="0x... receipt transaction hash"
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#00ffcc] font-['Space_Mono']"
+          />
+          <button
+            type="submit"
+            disabled={state === 'loading' || !input.trim()}
+            className="bg-[#00ffcc] text-black font-['Space_Mono'] text-sm font-bold px-6 py-3 rounded hover:bg-[#00ffcc]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {state === 'loading' ? 'Verifying...' : 'Verify'}
+          </button>
+        </form>
 
-          <div className="lg:col-span-2 bg-bg p-8 space-y-8">
-
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <span className={
-                  'font-mono text-xs px-2 py-0.5 border ' +
-                  (dataset.license_type === 'commercial'
-                    ? 'border-cyan/40 text-cyan'
-                    : dataset.license_type === 'research'
-                    ? 'border-amber/40 text-amber'
-                    : 'border-border text-dim')
-                }>
-                  {dataset.license_type}
-                </span>
-                <span className="font-mono text-xs text-dim">{timeAgo(dataset.created_at)}</span>
-                {dataset.active === 1 && (
-                  <span className="flex items-center gap-1 font-mono text-xs text-cyan">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan pulse-cyan" />
-                    active
-                  </span>
-                )}
-              </div>
-              <h1 className="font-sans font-extrabold text-3xl md:text-4xl mb-4">{dataset.name}</h1>
-              <p className="font-mono text-sm text-dim leading-relaxed">{dataset.description}</p>
+        {/* Loading */}
+        {state === 'loading' && (
+          <div className="border border-zinc-800 rounded-lg p-8 bg-zinc-900/40 text-center">
+            <div className="flex items-center justify-center gap-3 text-zinc-400 font-['Space_Mono'] text-sm">
+              <span className="w-2 h-2 rounded-full bg-[#00ffcc] animate-pulse" />
+              Reading blob from Ethereum...
             </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
-              {[
-                { label: 'File Size', value: formatSize(dataset.file_size) },
-                { label: 'Blob Chunks', value: dataset.chunk_count + ' blobs' },
-                { label: 'Format', value: dataset.content_type.split('/')[1] },
-                { label: 'Creator', value: short(dataset.creator_address) },
-              ].map(function(item) {
-                return (
-                  <div key={item.label} className="bg-surface p-4">
-                    <div className="font-mono text-xs text-dim mb-1">{item.label}</div>
-                    <div className="font-mono text-sm text-text">{item.value}</div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="space-y-3">
-              <span className="font-mono text-xs text-dim tracking-widest uppercase">// blob references</span>
-              {[
-                { label: 'manifest tx', value: dataset.manifest_tx_hash },
-                { label: 'file hash', value: dataset.file_hash },
-                { label: 'payload hash', value: dataset.payload_hash },
-              ].map(function(item) {
-                return (
-                  <div key={item.label} className="border border-border p-3">
-                    <div className="font-mono text-xs text-dim mb-1">{item.label}</div>
-                    <div className="font-mono text-xs text-text break-all">{item.value}</div>
-                  </div>
-                )
-              })}
-            </div>
-
           </div>
+        )}
 
-          <div className="bg-bg p-8 flex flex-col gap-6">
-
-            <div className="border border-border p-6 text-center">
-              <div className="font-mono text-xs text-dim mb-2 tracking-widest uppercase">license price</div>
-              <div className="font-sans font-extrabold text-4xl text-cyan glow-cyan-text">
-                {isFree ? 'FREE' : formatEth(dataset.price_wei)}
-              </div>
-              {!isFree && <div className="font-mono text-xs text-dim mt-1">ETH</div>}
-              <div className="font-mono text-xs text-dim mt-3">
-                2.5% protocol fee · receipt stored on blob
-              </div>
-            </div>
-
-            {license && license.licensed ? (
-              <div className="border border-cyan/40 bg-cyan/5 p-4 text-center glow-cyan">
-                <div className="font-mono text-xs text-cyan mb-1">licensed</div>
-                <p className="font-mono text-xs text-dim">You hold a valid license for this dataset.</p>
-                {license.receipt && (
-                  <Link
-                    to={'/verify/' + license.receipt.receiptTxHash}
-                    className="font-mono text-xs text-cyan hover:underline mt-2 block"
-                  >
-                    view receipt
-                  </Link>
-                )}
-              </div>
-            ) : isOwner ? (
-              <div className="border border-border p-4 text-center">
-                <p className="font-mono text-xs text-dim">you own this dataset</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <button
-                  onClick={handlePurchase}
-                  disabled={purchasing}
-                  className="w-full font-mono text-sm tracking-widest uppercase py-3 bg-cyan text-bg font-bold hover:opacity-90 transition-opacity glow-cyan disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {!isConnected
-                    ? 'connect wallet'
-                    : purchasing
-                    ? txStatus === 'signing'
-                      ? 'sign in wallet...'
-                      : txStatus === 'sending'
-                      ? 'sending tx...'
-                      : 'confirming...'
-                    : isFree
-                    ? 'get free license'
-                    : 'purchase license'}
-                </button>
-
-                {txStatus === 'done' && (
-                  <div className="border border-cyan/40 bg-cyan/5 p-3 fade-in">
-                    <p className="font-mono text-xs text-cyan mb-1">license purchased</p>
-                   {txHash && (
-  <a
-    href={'https://sepolia.etherscan.io/tx/' + txHash}
-    target="_blank"
-    rel="noreferrer"
-    className="font-mono text-xs text-dim hover:text-cyan transition-colors break-all block"
-  >
-    {txHash}
-  </a>
-)}
-                  </div>
-                )}
-
-                {txStatus === 'error' && (
-                  <div className="border border-red-900/40 bg-red-900/5 p-3 fade-in">
-                    <p className="font-mono text-xs text-red-400">{errorMsg}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <span className="font-mono text-xs text-dim tracking-widest uppercase">// what you get</span>
-              {[
-                'Cryptographic receipt stored as Ethereum blob',
-                'On-chain proof of purchase via smart contract',
-                'Direct dataset download access',
-                'KZG-verified data integrity proof',
-              ].map(function(item) {
-                return (
-                  <div key={item} className="flex items-start gap-2">
-                    <span className="text-cyan font-mono text-xs mt-0.5">-&gt;</span>
-                    <span className="font-mono text-xs text-dim">{item}</span>
-                  </div>
-                )
-              })}
-            </div>
-
-            <Link
-              to={'/verify/' + dataset.manifest_tx_hash}
-              className="font-mono text-xs text-dim hover:text-cyan transition-colors text-center block"
-            >
-              verify dataset integrity
-            </Link>
-
+        {/* Error */}
+        {(state === 'error' || state === 'invalid') && (
+          <div className="border border-red-800 bg-red-900/20 rounded-lg p-6">
+            <p className="text-red-400 font-['Space_Mono'] text-sm mb-2">
+              ⚠ Verification Failed
+            </p>
+            <p className="text-zinc-400 font-['Space_Mono'] text-xs">{errorMsg}</p>
           </div>
-        </div>
+        )}
+
+        {/* Found: BlobFS Receipt */}
+        {state === 'found' && receipt && (
+          <div className="space-y-4">
+            {/* Valid badge */}
+            <div className="flex items-center gap-3 border border-[#00ffcc]/40 bg-[#00ffcc]/5 rounded-lg px-5 py-4">
+              <div className="w-8 h-8 rounded-full bg-[#00ffcc]/20 border border-[#00ffcc] flex items-center justify-center shrink-0">
+                <span className="text-[#00ffcc] text-sm">✓</span>
+              </div>
+              <div>
+                <p className="font-['Syne'] font-bold text-[#00ffcc]">
+                  Valid License Receipt
+                </p>
+                <p className="font-['Space_Mono'] text-xs text-zinc-400 mt-0.5">
+                  Stored on Ethereum blobspace · Source: {blobSource}
+                </p>
+              </div>
+            </div>
+
+            {/* License details */}
+            <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
+                License Details
+              </h2>
+              <div className="space-y-4 font-['Space_Mono'] text-xs">
+                <VerifyRow label="Dataset ID" value={receipt.datasetId} />
+                <VerifyRow label="License Type" value={receipt.licenseType} badge />
+                <VerifyRow label="Amount Paid" value={formatETH(receipt.amountPaid)} highlight />
+                <VerifyRow label="Purchased" value={formatDate(receipt.purchasedAt)} />
+              </div>
+            </div>
+
+            {/* Addresses */}
+            <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
+                On-Chain Addresses
+              </h2>
+              <div className="space-y-4 font-['Space_Mono'] text-xs">
+                <VerifyRow label="Buyer" value={receipt.buyer} address />
+                <VerifyRow label="Seller" value={receipt.seller} address />
+                <VerifyRow label="Manifest TX" value={receipt.manifestTxHash} tx />
+                <VerifyRow label="Payment TX" value={receipt.ethTxHash} tx />
+                <VerifyRow label="Receipt Blob TX" value={receipt.receiptTxHash} tx />
+              </div>
+            </div>
+
+            {/* Hashes */}
+            <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
+                Data Integrity
+              </h2>
+              <div className="space-y-4 font-['Space_Mono'] text-xs">
+                <VerifyRow label="File Hash" value={receipt.fileHash} />
+                <VerifyRow label="Payload Hash" value={receipt.payloadHash} />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <a
+                href={`https://sepolia.etherscan.io/tx/${receipt.receiptTxHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 text-center border border-zinc-700 text-zinc-300 font-['Space_Mono'] text-xs py-3 rounded hover:border-[#00ffcc] hover:text-[#00ffcc] transition-colors"
+              >
+                View on Etherscan ↗
+              </a>
+              <Link
+                to={`/dataset/${receipt.datasetId}`}
+                className="flex-1 text-center bg-[#00ffcc] text-black font-['Space_Mono'] text-xs font-bold py-3 rounded hover:bg-[#00ffcc]/90 transition-colors"
+              >
+                View Dataset
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Found: Raw blob (not a receipt) */}
+        {state === 'found' && !receipt && rawBlob && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 border border-zinc-700 bg-zinc-900/40 rounded-lg px-5 py-4">
+              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-600 flex items-center justify-center shrink-0">
+                <span className="text-zinc-400 text-sm">~</span>
+              </div>
+              <div>
+                <p className="font-['Syne'] font-bold text-zinc-300">
+                  Blob Found (Not a BlobFS Receipt)
+                </p>
+                <p className="font-['Space_Mono'] text-xs text-zinc-500 mt-0.5">
+                  Source: {blobSource}
+                </p>
+              </div>
+            </div>
+
+            <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40">
+              <p className="font-['Space_Mono'] text-xs text-zinc-400 mb-3 uppercase tracking-wider">
+                Raw Blob Data
+              </p>
+              <pre className="text-xs text-zinc-300 font-['Space_Mono'] overflow-x-auto whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
+                {rawBlob.length > 2000 ? rawBlob.slice(0, 2000) + '\n...(truncated)' : rawBlob}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Idle: how it works */}
+        {state === 'idle' && (
+          <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/20">
+            <h2 className="font-['Syne'] text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+              How Verification Works
+            </h2>
+            <div className="space-y-3 font-['Space_Mono'] text-xs text-zinc-500">
+              <Step n={1} text="Paste the receipt TX hash you received after purchasing a dataset license." />
+              <Step n={2} text="BlobFS reads the blob directly from Ethereum blobspace (or archive if >18 days old)." />
+              <Step n={3} text="The receipt is decoded and cross-checked against the on-chain license registry." />
+              <Step n={4} text="Buyer address, seller address, dataset hash, and payment amount are displayed." />
+            </div>
+          </div>
+        )}
       </div>
-    </main>
-  )
+    </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────
+
+function VerifyRow({
+  label,
+  value,
+  tx = false,
+  address = false,
+  highlight = false,
+  badge = false,
+}: {
+  label: string;
+  value: string;
+  tx?: boolean;
+  address?: boolean;
+  highlight?: boolean;
+  badge?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-2 border-b border-zinc-800/60 last:border-0">
+      <span className="text-zinc-500 shrink-0 pt-0.5">{label}</span>
+      {tx ? (
+        <a
+          href={`https://sepolia.etherscan.io/tx/${value}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]"
+          title={value}
+        >
+          {value.slice(0, 10)}...{value.slice(-8)}
+        </a>
+      ) : address ? (
+        <a
+          href={`https://sepolia.etherscan.io/address/${value}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]"
+          title={value}
+        >
+          {value.slice(0, 10)}...{value.slice(-8)}
+        </a>
+      ) : badge ? (
+        <span className="border border-[#00ffcc]/50 text-[#00ffcc] rounded px-2 py-0.5 uppercase text-xs">
+          {value}
+        </span>
+      ) : highlight ? (
+        <span className="text-[#00ffcc] font-semibold">{value}</span>
+      ) : (
+        <span className="text-zinc-300 text-right break-all">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function Step({ n, text }: { n: number; text: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="w-5 h-5 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-500 shrink-0 text-xs">
+        {n}
+      </span>
+      <span>{text}</span>
+    </div>
+  );
 }

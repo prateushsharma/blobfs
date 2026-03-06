@@ -1,388 +1,475 @@
-import { useState, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import { useWalletStore } from '../store/useWalletStore'
+import { useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAccount } from 'wagmi';
+import { uploadDataset, publishDataset } from '../api/datasets';
+import { getGasEstimate } from '../api/blobs';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+type PublishStep =
+  | 'idle'
+  | 'estimating'
+  | 'uploading'
+  | 'publishing'
+  | 'done'
+  | 'error';
 
-const LICENSE_TYPES = ['commercial', 'research', 'open']
+type LicenseType = 'commercial' | 'research' | 'open';
 
-type Step = 'upload' | 'configure' | 'estimate' | 'publishing' | 'done'
-
-interface CostEstimate {
-  totalETH: string
-  blobCount: number
-  fileSizeBytes: number
+interface FormState {
+  name: string;
+  description: string;
+  priceETH: string;
+  licenseType: LicenseType;
 }
 
-interface PublishResult {
-  datasetId: string
-  manifestTxHash: string
+interface UploadResult {
+  manifestTxHash: string;
+  chunkTxHashes: string[];
+  fileHash: string;
+  estimatedETH: string;
 }
 
-function formatSize(bytes: number) {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(2)} MB`
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(2)} KB`
-  return `${bytes} B`
+function formatSize(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
+
+const LICENSE_OPTIONS: { value: LicenseType; label: string; desc: string }[] = [
+  { value: 'commercial', label: 'Commercial', desc: 'Buyers may use for any commercial purpose' },
+  { value: 'research', label: 'Research', desc: 'Non-commercial research and academic use only' },
+  { value: 'open', label: 'Open', desc: 'Free to use, modify, and redistribute' },
+];
 
 export default function Publish() {
-  const navigate = useNavigate()
-  const { isConnected, address, connect } = useWalletStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate();
+  const { address, isConnected } = useAccount();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<Step>('upload')
-  const [dragging, setDragging] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [licenseType, setLicenseType] = useState('commercial')
-  const [priceEth, setPriceEth] = useState('0.005')
-  const [estimate, setEstimate] = useState<CostEstimate | null>(null)
-  const [result, setResult] = useState<PublishResult | null>(null)
-  const [error, setError] = useState('')
-  const [publishLog, setPublishLog] = useState<string[]>([])
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    name: '',
+    description: '',
+    priceETH: '0.01',
+    licenseType: 'commercial',
+  });
 
-  const addLog = (msg: string) => setPublishLog(prev => [...prev, `[${new Date().toISOString().slice(11, 19)}] ${msg}`])
+  const [step, setStep] = useState<PublishStep>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [gasEstimate, setGasEstimate] = useState('');
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const [datasetId, setDatasetId] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // ── Drag & Drop ───────────────────────────────────────────────
 
   const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const f = e.dataTransfer.files[0]
-    if (f) { setFile(f); setName(f.name.replace(/\.[^.]+$/, '')) }
-  }, [])
+    e.preventDefault();
+    setDragOver(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) handleFileSelect(dropped);
+  }, []);
 
-  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) { setFile(f); setName(f.name.replace(/\.[^.]+$/, '')) }
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const onDragLeave = () => setDragOver(false);
+
+  function handleFileSelect(f: File) {
+    setFile(f);
+    setForm((prev) =>
+      prev.name ? prev : { ...prev, name: f.name.replace(/\.[^/.]+$/, '') }
+    );
+    fetchGasEstimate();
   }
 
-  const handleEstimate = async () => {
-    if (!file) return
-    setError('')
+  async function fetchGasEstimate() {
+    setStep('estimating');
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await axios.post(`${API}/api/datasets/estimate`, form)
-      setEstimate(res.data)
-      setStep('estimate')
+      const gas = await getGasEstimate();
+      setGasEstimate(gas.estimatedETHPerBlob);
     } catch {
-      // Mock estimate when backend unavailable
-      const blobCount = Math.ceil(file.size / (120 * 1024))
-      setEstimate({
-        totalETH: (blobCount * 0.0008).toFixed(6),
-        blobCount,
-        fileSizeBytes: file.size,
-      })
-      setStep('estimate')
+      setGasEstimate('');
+    } finally {
+      setStep('idle');
     }
   }
 
-  const handlePublish = async () => {
-    if (!isConnected || !address) { connect(); return }
-    if (!file || !estimate) return
+  // ── Validation ────────────────────────────────────────────────
 
-    setStep('publishing')
-    setPublishLog([])
-    setError('')
+  function validate(): string | null {
+    if (!file) return 'Select a file to upload.';
+    if (!form.name.trim()) return 'Dataset name is required.';
+    if (!form.description.trim()) return 'Description is required.';
+    const price = parseFloat(form.priceETH);
+    if (isNaN(price) || price < 0) return 'Invalid price.';
+    if (!isConnected) return 'Connect your wallet first.';
+    return null;
+  }
+
+  // ── Submit ────────────────────────────────────────────────────
+
+  async function handlePublish() {
+    const validationError = validate();
+    if (validationError) {
+      setErrorMsg(validationError);
+      return;
+    }
+
+    setErrorMsg('');
 
     try {
-      addLog('Initializing BlobKit...')
-      addLog(`Splitting file into ${estimate.blobCount} blob chunks...`)
+      setStep('uploading');
+      setUploadProgress(0);
 
-      const form = new FormData()
-      form.append('file', file)
-      form.append('name', name)
-      form.append('description', description)
-      form.append('licenseType', licenseType)
-      form.append('priceWei', String(Math.floor(parseFloat(priceEth) * 1e18)))
-      form.append('creatorAddress', address)
+      const result = await uploadDataset(file!, (pct) => setUploadProgress(pct));
+      setUploadResult(result);
 
-      // Simulate chunk progress
-      for (let i = 0; i < estimate.blobCount; i++) {
-        await new Promise(r => setTimeout(r, 600))
-        addLog(`Writing chunk ${i + 1}/${estimate.blobCount} to Ethereum blobspace...`)
-      }
+      setStep('publishing');
 
-      const res = await axios.post(`${API}/api/datasets/publish`, form).catch(() => ({
-        data: {
-          datasetId: `mock-${Date.now()}`,
-          manifestTxHash: `0x${Math.random().toString(16).slice(2).padEnd(64, '0')}`,
-        }
-      }))
+      const priceWei = BigInt(Math.round(parseFloat(form.priceETH) * 1e18)).toString();
 
-      addLog('Writing manifest blob...')
-      await new Promise(r => setTimeout(r, 800))
-      addLog('Registering on-chain via DatasetRegistry...')
-      await new Promise(r => setTimeout(r, 600))
-      addLog('Dataset published successfully ✓')
+      const { datasetId: did } = await publishDataset({
+        manifestTxHash: result.manifestTxHash,
+        priceWei,
+        licenseType: form.licenseType,
+        name: form.name.trim(),
+        description: form.description.trim(),
+      });
 
-      setResult(res.data)
-      setStep('done')
-    } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'Publish failed')
-      setStep('estimate')
+      setDatasetId(did);
+      setStep('done');
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Publish failed');
+      setStep('error');
     }
   }
+
+  function resetForm() {
+    setFile(null);
+    setForm({ name: '', description: '', priceETH: '0.01', licenseType: 'commercial' });
+    setStep('idle');
+    setUploadProgress(0);
+    setUploadResult(null);
+    setDatasetId('');
+    setErrorMsg('');
+    setGasEstimate('');
+  }
+
+  // ── Render: Success ───────────────────────────────────────────
+
+  if (step === 'done' && uploadResult) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
+        <div className="max-w-2xl mx-auto">
+          <div className="border border-[#00ffcc]/40 rounded-lg p-8 bg-[#00ffcc]/5 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#00ffcc]/20 border border-[#00ffcc] flex items-center justify-center mx-auto mb-6">
+              <span className="text-[#00ffcc] text-2xl">✓</span>
+            </div>
+            <h1 className="font-['Syne'] text-3xl font-bold mb-2">Dataset Published</h1>
+            <p className="text-zinc-400 text-sm mb-8">
+              Your dataset is live on Ethereum blobspace and listed in the marketplace.
+            </p>
+
+            <div className="text-left space-y-3 font-['Space_Mono'] text-xs mb-8">
+              <ResultRow label="Dataset ID" value={datasetId} />
+              <ResultRow label="Manifest TX" value={uploadResult.manifestTxHash} hash />
+              <ResultRow label="File Hash" value={uploadResult.fileHash} />
+              <ResultRow
+                label="Chunks"
+                value={`${uploadResult.chunkTxHashes.length} blob${
+                  uploadResult.chunkTxHashes.length !== 1 ? 's' : ''
+                } on Ethereum`}
+              />
+              <ResultRow label="Blob Gas Spent" value={`~${uploadResult.estimatedETH} ETH`} />
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => navigate(`/dataset/${datasetId}`)}
+                className="bg-[#00ffcc] text-black font-['Space_Mono'] text-sm font-bold px-6 py-3 rounded hover:bg-[#00ffcc]/90 transition-colors"
+              >
+                View Dataset
+              </button>
+              <button
+                onClick={resetForm}
+                className="border border-zinc-600 text-zinc-300 font-['Space_Mono'] text-sm px-6 py-3 rounded hover:border-zinc-400 transition-colors"
+              >
+                Publish Another
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: Main Form ─────────────────────────────────────────
+
+  const isProcessing = ['estimating', 'uploading', 'publishing'].includes(step);
 
   return (
-    <main className="pt-24 pb-16 px-6 min-h-screen">
-      <div className="max-w-4xl mx-auto">
-
+    <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-10 fade-in">
-          <span className="font-mono text-xs text-dim tracking-widest uppercase">// publish dataset</span>
-          <h1 className="font-sans font-extrabold text-4xl md:text-5xl mt-2">
-            Upload to <span className="text-cyan">Blobspace</span>
+        <div className="mb-10">
+          <h1 className="font-['Syne'] text-4xl font-bold mb-2">
+            Publish <span className="text-[#00ffcc]">Dataset</span>
           </h1>
-          <p className="font-mono text-sm text-dim mt-2">
-            Your dataset will be chunked and written to Ethereum EIP-4844 blobs via BlobKit.
+          <p className="text-zinc-400 font-['Space_Mono'] text-sm">
+            Upload to Ethereum blobspace. Set your license. Earn ETH royalties.
           </p>
         </div>
 
-        {/* Progress steps */}
-        <div className="flex items-center gap-0 mb-10 fade-in">
-          {(['upload', 'configure', 'estimate', 'publishing', 'done'] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center">
-              <div className={`font-mono text-xs px-3 py-1 border transition-all duration-300 ${
-                step === s
-                  ? 'border-cyan text-cyan bg-cyan/5'
-                  : (['upload', 'configure', 'estimate', 'publishing', 'done'].indexOf(step) > i)
-                  ? 'border-cyan/30 text-cyan/40'
-                  : 'border-border text-border'
-              }`}>
-                {s}
+        {!isConnected && (
+          <div className="border border-amber-800 bg-amber-900/20 rounded p-4 text-amber-400 font-['Space_Mono'] text-sm mb-8">
+            ⚠ Connect your wallet before publishing.
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {/* Drop Zone */}
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onClick={() => !isProcessing && fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-all duration-200 ${
+              dragOver
+                ? 'border-[#00ffcc] bg-[#00ffcc]/5'
+                : file
+                ? 'border-[#00ffcc]/40 bg-zinc-900/40'
+                : 'border-zinc-700 bg-zinc-900/20 hover:border-zinc-500'
+            } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+            />
+
+            {file ? (
+              <div>
+                <p className="font-['Syne'] text-xl font-semibold text-[#00ffcc] mb-1">
+                  {file.name}
+                </p>
+                <p className="text-zinc-400 font-['Space_Mono'] text-sm">
+                  {formatSize(file.size)} · {file.type || 'unknown type'}
+                </p>
+                {gasEstimate && (
+                  <p className="text-zinc-500 font-['Space_Mono'] text-xs mt-2">
+                    Est. blob gas: ~{gasEstimate} ETH/blob
+                  </p>
+                )}
+                {!isProcessing && (
+                  <p className="text-zinc-600 font-['Space_Mono'] text-xs mt-3">
+                    Click to change file
+                  </p>
+                )}
               </div>
-              {i < 4 && <div className={`w-6 h-px transition-colors duration-300 ${
-                ['upload', 'configure', 'estimate', 'publishing', 'done'].indexOf(step) > i
-                  ? 'bg-cyan/30' : 'bg-border'
-              }`} />}
-            </div>
-          ))}
-        </div>
-
-        {/* Step: Upload */}
-        {(step === 'upload' || step === 'configure') && (
-          <div className="space-y-6 fade-in">
-
-            {/* Drop zone */}
-            <div
-              onDragOver={e => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-200 ${
-                dragging
-                  ? 'border-cyan bg-cyan/5 glow-cyan'
-                  : file
-                  ? 'border-cyan/40 bg-surface'
-                  : 'border-border hover:border-muted bg-surface'
-              }`}
-            >
-              <input ref={fileInputRef} type="file" className="hidden" onChange={onFileSelect} />
-              {file ? (
-                <div>
-                  <div className="font-mono text-cyan text-sm mb-1">✓ {file.name}</div>
-                  <div className="font-mono text-xs text-dim">{formatSize(file.size)} · {file.type || 'unknown type'}</div>
-                  <div className="font-mono text-xs text-dim mt-2">click to change file</div>
+            ) : (
+              <div>
+                <div className="w-12 h-12 border border-zinc-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-zinc-400 text-xl">↑</span>
                 </div>
-              ) : (
-                <div>
-                  <div className="font-sans font-bold text-lg mb-2">Drop your dataset here</div>
-                  <div className="font-mono text-xs text-dim">or click to browse · max 744KB per upload (6 blobs)</div>
-                </div>
-              )}
-            </div>
-
-            {/* Configure fields */}
-            {file && (
-              <div className="space-y-4">
-                <div>
-                  <label className="font-mono text-xs text-dim tracking-widest uppercase block mb-2">dataset name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full bg-surface border border-border font-mono text-sm text-text px-4 py-3 focus:outline-none focus:border-cyan transition-colors"
-                    placeholder="e.g. ImageNet Subset 10k"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-mono text-xs text-dim tracking-widest uppercase block mb-2">description</label>
-                  <textarea
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    rows={3}
-                    className="w-full bg-surface border border-border font-mono text-sm text-text px-4 py-3 focus:outline-none focus:border-cyan transition-colors resize-none"
-                    placeholder="Describe your dataset, use cases, format..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="font-mono text-xs text-dim tracking-widest uppercase block mb-2">license type</label>
-                    <div className="flex gap-1">
-                      {LICENSE_TYPES.map(l => (
-                        <button
-                          key={l}
-                          onClick={() => setLicenseType(l)}
-                          className={`flex-1 font-mono text-xs py-3 border transition-all duration-200 ${
-                            licenseType === l
-                              ? 'border-cyan text-cyan bg-cyan/5'
-                              : 'border-border text-dim hover:border-muted'
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="font-mono text-xs text-dim tracking-widest uppercase block mb-2">
-                      price (ETH) {licenseType === 'open' && <span className="text-cyan">— set to 0 for free</span>}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={priceEth}
-                        onChange={e => setPriceEth(e.target.value)}
-                        step="0.001"
-                        min="0"
-                        disabled={licenseType === 'open'}
-                        className="w-full bg-surface border border-border font-mono text-sm text-text px-4 py-3 focus:outline-none focus:border-cyan transition-colors disabled:opacity-40"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-xs text-dim">ETH</span>
-                    </div>
-                    <p className="font-mono text-xs text-dim mt-1">you receive 97.5% · 2.5% protocol fee</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleEstimate}
-                  disabled={!name || !description}
-                  className="w-full font-mono text-sm tracking-widest uppercase py-3 border border-cyan text-cyan hover:bg-cyan hover:text-bg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  estimate blob cost →
-                </button>
+                <p className="font-['Syne'] text-lg font-semibold mb-1">
+                  Drop your dataset here
+                </p>
+                <p className="text-zinc-500 font-['Space_Mono'] text-sm">
+                  CSV, Parquet, ZIP, JSON, or any format · Max 120KB per chunk
+                </p>
               </div>
             )}
           </div>
-        )}
 
-        {/* Step: Estimate */}
-        {step === 'estimate' && estimate && (
-          <div className="space-y-6 fade-in">
-            <div className="border border-border bg-surface p-8">
-              <span className="font-mono text-xs text-dim tracking-widest uppercase block mb-6">// cost estimate</span>
+          {/* Form Fields */}
+          <div className="grid grid-cols-1 gap-5">
+            {/* Name */}
+            <div>
+              <label className="block font-['Space_Mono'] text-xs text-zinc-400 mb-2 uppercase tracking-wider">
+                Dataset Name
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                disabled={isProcessing}
+                placeholder="e.g. ImageNet Subset 10k"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#00ffcc] font-['Space_Mono'] disabled:opacity-50"
+              />
+            </div>
 
-              <div className="grid grid-cols-3 gap-px bg-border mb-6">
-                {[
-                  { label: 'File Size', value: formatSize(estimate.fileSizeBytes) },
-                  { label: 'Blob Chunks', value: `${estimate.blobCount} blobs` },
-                  { label: 'Upload Cost', value: `${estimate.totalETH} ETH` },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-bg p-4 text-center">
-                    <div className="font-mono text-xs text-dim mb-1">{label}</div>
-                    <div className="font-mono text-sm text-cyan">{value}</div>
-                  </div>
-                ))}
-              </div>
+            {/* Description */}
+            <div>
+              <label className="block font-['Space_Mono'] text-xs text-zinc-400 mb-2 uppercase tracking-wider">
+                Description
+              </label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                disabled={isProcessing}
+                placeholder="Describe your dataset, its contents, intended use, and provenance..."
+                rows={4}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#00ffcc] font-['Space_Mono'] disabled:opacity-50 resize-none"
+              />
+            </div>
 
-              <div className="space-y-2 mb-6">
-                {[
-                  `${estimate.blobCount} blob transaction(s) will be submitted to Ethereum`,
-                  'Each blob is KZG-committed and verified on-chain',
-                  'Manifest blob written after all chunks confirmed',
-                  'Dataset registered in DatasetRegistry smart contract',
-                  'Blobs expire in 18 days — archive via blobscan.com',
-                ].map(item => (
-                  <div key={item} className="flex items-start gap-2">
-                    <span className="text-cyan font-mono text-xs mt-0.5">→</span>
-                    <span className="font-mono text-xs text-dim">{item}</span>
-                  </div>
-                ))}
-              </div>
-
-              {error && (
-                <div className="border border-red-900/40 bg-red-900/5 p-3 mb-4">
-                  <p className="font-mono text-xs text-red-400">✗ {error}</p>
+            {/* Price + License */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Price */}
+              <div>
+                <label className="block font-['Space_Mono'] text-xs text-zinc-400 mb-2 uppercase tracking-wider">
+                  License Price (ETH)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={form.priceETH}
+                    onChange={(e) => setForm((p) => ({ ...p, priceETH: e.target.value }))}
+                    disabled={isProcessing}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00ffcc] font-['Space_Mono'] disabled:opacity-50 pr-14"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 font-['Space_Mono'] text-xs">
+                    ETH
+                  </span>
                 </div>
-              )}
+                <p className="text-zinc-600 font-['Space_Mono'] text-xs mt-1">
+                  You receive {((parseFloat(form.priceETH) || 0) * 0.975).toFixed(4)} ETH after 2.5% fee
+                </p>
+              </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep('upload')}
-                  className="font-mono text-xs text-dim hover:text-text border border-border hover:border-muted px-4 py-3 transition-all duration-200"
-                >
-                  ← back
-                </button>
-                <button
-                  onClick={handlePublish}
-                  className="flex-1 font-mono text-sm tracking-widest uppercase py-3 bg-cyan text-bg font-bold hover:opacity-90 transition-opacity glow-cyan"
-                >
-                  {isConnected ? 'publish to blobspace →' : 'connect wallet to publish'}
-                </button>
+              {/* License Type */}
+              <div>
+                <label className="block font-['Space_Mono'] text-xs text-zinc-400 mb-2 uppercase tracking-wider">
+                  License Type
+                </label>
+                <div className="space-y-2">
+                  {LICENSE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${
+                        form.licenseType === opt.value
+                          ? 'border-[#00ffcc]/50 bg-[#00ffcc]/5'
+                          : 'border-zinc-800 hover:border-zinc-600'
+                      } ${isProcessing ? 'pointer-events-none opacity-50' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="licenseType"
+                        value={opt.value}
+                        checked={form.licenseType === opt.value}
+                        onChange={() => setForm((p) => ({ ...p, licenseType: opt.value }))}
+                        className="mt-0.5 accent-[#00ffcc]"
+                      />
+                      <div>
+                        <p className="font-['Space_Mono'] text-xs text-white">{opt.label}</p>
+                        <p className="font-['Space_Mono'] text-xs text-zinc-500 mt-0.5">
+                          {opt.desc}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Step: Publishing */}
-        {step === 'publishing' && (
-          <div className="border border-border bg-surface p-8 fade-in">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-2 h-2 rounded-full bg-cyan pulse-cyan" />
-              <span className="font-mono text-sm text-cyan">publishing to Ethereum blobspace...</span>
+          {/* Error */}
+          {(errorMsg || step === 'error') && (
+            <div className="border border-red-800 bg-red-900/20 rounded p-4 text-red-400 font-['Space_Mono'] text-sm">
+              ⚠ {errorMsg}
             </div>
-            <div className="space-y-1 font-mono text-xs text-dim max-h-64 overflow-y-auto">
-              {publishLog.map((log, i) => (
-                <div key={i} className="fade-in">{log}</div>
-              ))}
-              <div className="text-cyan blink">█</div>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Step: Done */}
-        {step === 'done' && result && (
-          <div className="border border-cyan/40 bg-cyan/5 p-8 fade-in glow-cyan">
-            <div className="font-mono text-cyan text-lg mb-2">✓ dataset published</div>
-            <p className="font-mono text-xs text-dim mb-6">
-              Your dataset is now live on Ethereum blobspace and available in the marketplace.
-            </p>
-
-            <div className="space-y-3 mb-8">
-              <div className="border border-border p-3">
-                <div className="font-mono text-xs text-dim mb-1">dataset id</div>
-                <div className="font-mono text-xs text-text">{result.datasetId}</div>
+          {/* Progress: Uploading */}
+          {step === 'uploading' && (
+            <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40 space-y-3">
+              <div className="flex items-center justify-between font-['Space_Mono'] text-xs">
+                <span className="text-amber-400 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Chunking and writing to blobspace...
+                </span>
+                <span className="text-zinc-400">{uploadProgress}%</span>
               </div>
-              <div className="border border-border p-3">
-                <div className="font-mono text-xs text-dim mb-1">manifest tx hash</div>
-                <div className="font-mono text-xs text-text break-all">{result.manifestTxHash}</div>
+              <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                <div
+                  className="bg-[#00ffcc] h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
               </div>
+              <p className="text-zinc-600 font-['Space_Mono'] text-xs">
+                Each chunk is written as a separate blob transaction on Ethereum
+              </p>
             </div>
+          )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => navigate(`/dataset/${result.datasetId}`)}
-                className="flex-1 font-mono text-sm tracking-widest uppercase py-3 bg-cyan text-bg font-bold hover:opacity-90 transition-opacity"
-              >
-                view dataset →
-              </button>
-              <button
-                onClick={() => navigate('/marketplace')}
-                className="font-mono text-xs text-dim hover:text-text border border-border hover:border-muted px-4 py-3 transition-all duration-200"
-              >
-                marketplace
-              </button>
+          {/* Progress: Publishing */}
+          {step === 'publishing' && (
+            <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40">
+              <p className="text-amber-400 font-['Space_Mono'] text-xs flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Writing manifest blob and registering on-chain...
+              </p>
             </div>
-          </div>
-        )}
+          )}
 
+          {/* Submit */}
+          <button
+            onClick={handlePublish}
+            disabled={isProcessing || !isConnected}
+            className="w-full bg-[#00ffcc] text-black font-['Space_Mono'] text-sm font-bold py-4 rounded hover:bg-[#00ffcc]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {step === 'uploading'
+              ? `Uploading... ${uploadProgress}%`
+              : step === 'publishing'
+              ? 'Publishing on-chain...'
+              : step === 'estimating'
+              ? 'Estimating gas...'
+              : 'Publish Dataset'}
+          </button>
+
+          <p className="text-zinc-600 font-['Space_Mono'] text-xs text-center">
+            Publishing writes your dataset to Ethereum blobspace via BlobKit.
+            Blob gas fees apply on top of the license price you set.
+          </p>
+        </div>
       </div>
-    </main>
-  )
+    </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────
+
+function ResultRow({
+  label,
+  value,
+  hash = false,
+}: {
+  label: string;
+  value: string;
+  hash?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 border-b border-zinc-800 last:border-0">
+      <span className="text-zinc-500 shrink-0">{label}</span>
+      {hash ? (
+        <a
+          href={`https://sepolia.etherscan.io/tx/${value}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#00ffcc] hover:underline truncate text-right"
+          title={value}
+        >
+          {value.slice(0, 12)}...{value.slice(-8)}
+        </a>
+      ) : (
+        <span className="text-zinc-300 text-right break-all">{value}</span>
+      )}
+    </div>
+  );
 }

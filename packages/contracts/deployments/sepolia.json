@@ -1,0 +1,17 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployedAt": "2026-03-06T18:22:29.260Z",
+  "deployer": "0x313a132F028422c2553aacD22bE55c06134AfaC8",
+  "treasury": "0x313a132F028422c2553aacD22bE55c06134AfaC8",
+  "contracts": {
+    "DatasetRegistry": {
+      "address": "0x130E6282AC19ae0B3f657BBf1303F4A1be75bbe2",
+      "etherscan": "https://sepolia.etherscan.io/address/0x130E6282AC19ae0B3f657BBf1303F4A1be75bbe2"
+    },
+    "LicenseMarket": {
+      "address": "0x9C9a50eeFAeb0d3661fdDD5702723E4faD63a62E",
+      "etherscan": "https://sepolia.etherscan.io/address/0x9C9a50eeFAeb0d3661fdDD5702723E4faD63a62E"
+    }
+  }
+}

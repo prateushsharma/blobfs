@@ -1,351 +1,307 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import axios from 'axios'
-import { BrowserProvider, ethers } from 'ethers'
-import { useWalletStore } from '../store/useWalletStore'
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAccount } from 'wagmi';
+import { listDatasets, DatasetMeta } from '../api/datasets';
+import { myLicenses, LicenseReceipt } from '../api/licenses';
+import { getWalletBalance, getWalletMetrics, WalletInfo, WalletMetrics } from '../api/wallet';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-
-interface Dataset {
-  id: string
-  name: string
-  description: string
-  content_type: string
-  file_size: number
-  chunk_count: number
-  price_wei: string
-  license_type: string
-  creator_address: string
-  manifest_tx_hash: string
-  file_hash: string
-  payload_hash: string
-  created_at: number
-  active: number
+function formatSize(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-interface License {
-  licensed: boolean
-  receipt: {
-    type: string
-    buyer: string
-    seller: string
-    amountPaid: string
-    purchasedAt: number
-    receiptTxHash: string
-    licenseType: string
-  } | null
+function formatETH(wei: string): string {
+  return `${(Number(BigInt(wei)) / 1e18).toFixed(4)} ETH`;
 }
 
-function formatSize(bytes: number) {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(2)} MB`
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(2)} KB`
-  return `${bytes} B`
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
 }
 
-function formatEth(wei: string) {
-  return (Number(BigInt(wei)) / 1e18).toFixed(4)
-}
+export default function Dashboard() {
+  const { address, isConnected } = useAccount();
 
-function short(addr: string) {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-}
-
-function timeAgo(ts: number) {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-const MOCK_DATASET: Dataset = {
-  id: '1',
-  name: 'ImageNet Subset 10k',
-  description: '10,000 labeled images across 100 categories for computer vision training. Each image is 224x224px, pre-normalized. Includes train/val/test splits and label metadata in JSON format.',
-  content_type: 'application/zip',
-  file_size: 524288000,
-  chunk_count: 5,
-  price_wei: '5000000000000000',
-  license_type: 'commercial',
-  creator_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77',
-  manifest_tx_hash: '0xabc123def456abc123def456abc123def456abc123def456abc123def456abc123',
-  file_hash: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-  payload_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-  created_at: Date.now() / 1000 - 3600,
-  active: 1,
-}
-
-export default function Dataset() {
-  const { id } = useParams()
-  const { address, isConnected, connect } = useWalletStore()
-
-  const [dataset, setDataset] = useState<Dataset | null>(null)
-  const [license, setLicense] = useState<License | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [purchasing, setPurchasing] = useState(false)
-  const [txStatus, setTxStatus] = useState<'idle' | 'signing' | 'sending' | 'confirming' | 'done' | 'error'>('idle')
-  const [txHash, setTxHash] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
+  const [metrics, setMetrics] = useState<WalletMetrics | null>(null);
+  const [myDatasets, setMyDatasets] = useState<DatasetMeta[]>([]);
+  const [purchases, setPurchases] = useState<LicenseReceipt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'published' | 'purchased'>('published');
 
   useEffect(() => {
-    Promise.all([
-      axios.get(`${API}/api/datasets/${id}`).catch(() => ({ data: { dataset: MOCK_DATASET } })),
-      address
-        ? axios.get(`${API}/api/licenses/verify?datasetId=${id}&address=${address}`).catch(() => ({ data: { licensed: false, receipt: null } }))
-        : Promise.resolve({ data: { licensed: false, receipt: null } }),
-    ]).then(([dRes, lRes]) => {
-      setDataset(dRes.data?.dataset || MOCK_DATASET)
-      setLicense(lRes.data)
-    }).finally(() => setLoading(false))
-  }, [id, address])
-
-  const handlePurchase = async () => {
-    if (!isConnected || !address) { connect(); return }
-    if (!dataset) return
-
-    setPurchasing(true)
-    setTxStatus('signing')
-    setErrorMsg('')
-
-    try {
-      const provider = new BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-
-      setTxStatus('sending')
-      const tx = await signer.sendTransaction({
-        to: dataset.creator_address,
-        value: BigInt(dataset.price_wei),
-      })
-
-      setTxStatus('confirming')
-      setTxHash(tx.hash)
-      await tx.wait()
-
-      await axios.post(`${API}/api/licenses/purchase`, {
-        datasetId: dataset.id,
-        buyerAddress: address,
-        paymentTxHash: tx.hash,
-      }).catch(() => {})
-
-      setTxStatus('done')
-      setLicense({ licensed: true, receipt: null })
-    } catch (err: any) {
-      setTxStatus('error')
-      setErrorMsg(err?.reason || err?.message || 'Transaction failed')
-    } finally {
-      setPurchasing(false)
+    if (!isConnected || !address) {
+      setLoading(false);
+      return;
     }
+    loadAll(address);
+  }, [address, isConnected]);
+
+  async function loadAll(addr: string) {
+    setLoading(true);
+    try {
+      const [wallet, met, allDatasets, licenses] = await Promise.allSettled([
+        getWalletBalance(),
+        getWalletMetrics(),
+        listDatasets(),
+        myLicenses(),
+      ]);
+
+      if (wallet.status === 'fulfilled') setWalletInfo(wallet.value);
+      if (met.status === 'fulfilled') setMetrics(met.value);
+      if (allDatasets.status === 'fulfilled') {
+        setMyDatasets(
+          allDatasets.value.filter(
+            (d) => d.creatorAddress.toLowerCase() === addr.toLowerCase()
+          )
+        );
+      }
+      if (licenses.status === 'fulfilled') setPurchases(licenses.value);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Not connected
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <p className="font-['Syne'] text-2xl font-bold mb-3">Connect Your Wallet</p>
+          <p className="text-zinc-500 font-['Space_Mono'] text-sm">
+            Connect MetaMask to view your dashboard.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
     return (
-      <main className="pt-24 pb-16 px-6 min-h-screen">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-surface rounded w-32" />
-            <div className="h-10 bg-surface rounded w-2/3" />
-            <div className="h-4 bg-surface rounded w-full" />
-          </div>
-        </div>
-      </main>
-    )
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <span className="text-zinc-400 font-['Space_Mono'] text-sm flex items-center gap-3">
+          <span className="w-2 h-2 rounded-full bg-[#00ffcc] animate-pulse" />
+          Loading dashboard...
+        </span>
+      </div>
+    );
   }
-
-  if (!dataset) {
-    return (
-      <main className="pt-24 pb-16 px-6 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="font-mono text-dim">dataset not found</p>
-          <Link to="/marketplace" className="font-mono text-xs text-cyan mt-4 block">
-            back to marketplace
-          </Link>
-        </div>
-      </main>
-    )
-  }
-
-  const isOwner = address?.toLowerCase() === dataset.creator_address.toLowerCase()
-  const isFree = dataset.license_type === 'open' || dataset.price_wei === '0'
-
-  const etherscanUrl = 'https://sepolia.etherscan.io/tx/' + txHash
 
   return (
-    <main className="pt-24 pb-16 px-6 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
+      <div className="max-w-6xl mx-auto">
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 mb-8 fade-in">
-          <Link to="/marketplace" className="font-mono text-xs text-dim hover:text-cyan transition-colors">
-            marketplace
-          </Link>
-          <span className="font-mono text-xs text-border">/</span>
-          <span className="font-mono text-xs text-text truncate max-w-xs">{dataset.name}</span>
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="font-['Syne'] text-4xl font-bold mb-2">Dashboard</h1>
+          <p className="text-zinc-500 font-['Space_Mono'] text-xs truncate">
+            {address}
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-border fade-in">
+        {/* Stats row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          <StatCard
+            label="Wallet Balance"
+            value={walletInfo ? `${parseFloat(walletInfo.balanceETH).toFixed(4)} ETH` : '—'}
+            accent
+          />
+          <StatCard
+            label="Datasets Published"
+            value={String(metrics?.totalDatasets ?? myDatasets.length)}
+          />
+          <StatCard
+            label="Licenses Sold"
+            value={String(metrics?.totalLicensesSold ?? '—')}
+          />
+          <StatCard
+            label="Blob Gas Spent"
+            value={metrics ? `${parseFloat(metrics.totalETHSpent).toFixed(4)} ETH` : '—'}
+          />
+        </div>
 
-          {/* Left: Details */}
-          <div className="lg:col-span-2 bg-bg p-8 space-y-8">
-
-            {/* Header */}
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <span className={`font-mono text-xs px-2 py-0.5 border ${
-                  dataset.license_type === 'commercial'
-                    ? 'border-cyan/40 text-cyan'
-                    : dataset.license_type === 'research'
-                    ? 'border-amber/40 text-amber'
-                    : 'border-border text-dim'
-                }`}>
-                  {dataset.license_type}
-                </span>
-                <span className="font-mono text-xs text-dim">{timeAgo(dataset.created_at)}</span>
-                {dataset.active === 1 && (
-                  <span className="flex items-center gap-1 font-mono text-xs text-cyan">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan pulse-cyan" />
-                    active
-                  </span>
-                )}
-              </div>
-              <h1 className="font-sans font-extrabold text-3xl md:text-4xl mb-4">{dataset.name}</h1>
-              <p className="font-mono text-sm text-dim leading-relaxed">{dataset.description}</p>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
-              {[
-                { label: 'File Size', value: formatSize(dataset.file_size) },
-                { label: 'Blob Chunks', value: `${dataset.chunk_count} blobs` },
-                { label: 'Format', value: dataset.content_type.split('/')[1] },
-                { label: 'Creator', value: short(dataset.creator_address) },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-surface p-4">
-                  <div className="font-mono text-xs text-dim mb-1">{label}</div>
-                  <div className="font-mono text-sm text-text">{value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Hashes */}
-            <div className="space-y-3">
-              <span className="font-mono text-xs text-dim tracking-widest uppercase">// blob references</span>
-              {[
-                { label: 'manifest tx', value: dataset.manifest_tx_hash },
-                { label: 'file hash', value: dataset.file_hash },
-                { label: 'payload hash', value: dataset.payload_hash },
-              ].map(({ label, value }) => (
-                <div key={label} className="border border-border p-3">
-                  <div className="font-mono text-xs text-dim mb-1">{label}</div>
-                  <div className="font-mono text-xs text-text break-all">{value}</div>
-                </div>
-              ))}
-            </div>
-
-          </div>
-
-          {/* Right: Purchase panel */}
-          <div className="bg-bg p-8 flex flex-col gap-6">
-
-            {/* Price */}
-            <div className="border border-border p-6 text-center">
-              <div className="font-mono text-xs text-dim mb-2 tracking-widest uppercase">license price</div>
-              <div className="font-sans font-extrabold text-4xl text-cyan glow-cyan-text">
-                {isFree ? 'FREE' : formatEth(dataset.price_wei)}
-              </div>
-              {!isFree && <div className="font-mono text-xs text-dim mt-1">ETH</div>}
-              <div className="font-mono text-xs text-dim mt-3">
-                2.5% protocol fee · receipt stored on blob
-              </div>
-            </div>
-
-            {/* License status */}
-            {license?.licensed ? (
-              <div className="border border-cyan/40 bg-cyan/5 p-4 text-center glow-cyan">
-                <div className="font-mono text-xs text-cyan mb-1">✓ licensed</div>
-                <p className="font-mono text-xs text-dim">You hold a valid license for this dataset.</p>
-                {license.receipt && (
-                  <Link
-                    to={'/verify/' + license.receipt.receiptTxHash}
-                    className="font-mono text-xs text-cyan hover:underline mt-2 block"
-                  >
-                    view receipt →
-                  </Link>
-                )}
-              </div>
-            ) : isOwner ? (
-              <div className="border border-border p-4 text-center">
-                <p className="font-mono text-xs text-dim">you own this dataset</p>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={handlePurchase}
-                  disabled={purchasing}
-                  className="w-full font-mono text-sm tracking-widest uppercase py-3 bg-cyan text-bg font-bold hover:opacity-90 transition-opacity glow-cyan disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {!isConnected
-                    ? 'connect wallet'
-                    : purchasing
-                    ? txStatus === 'signing'
-                      ? 'sign in wallet...'
-                      : txStatus === 'sending'
-                      ? 'sending tx...'
-                      : 'confirming...'
-                    : isFree
-                    ? 'get free license'
-                    : 'purchase license'}
-                </button>
-
-                {txStatus === 'done' && (
-  <div className="border border-cyan/40 bg-cyan/5 p-3 fade-in">
-    <p className="font-mono text-xs text-cyan mb-1">✓ license purchased</p>
-    {txHash && (
-      <a
-        href={etherscanUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="font-mono text-xs text-dim hover:text-cyan transition-colors break-all block"
-      >
-        {txHash.slice(0, 20)}... ↗
-      </a>
-    )}
-  </div>
-)}
-
-                {txStatus === 'error' && (
-                  <div className="border border-red-900/40 bg-red-900/5 p-3 fade-in">
-                    <p className="font-mono text-xs text-red-400">✗ {errorMsg}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* What you get */}
-            <div className="space-y-2">
-              <span className="font-mono text-xs text-dim tracking-widest uppercase">// what you get</span>
-              {[
-                'Cryptographic receipt stored as Ethereum blob',
-                'On-chain proof of purchase via smart contract',
-                'Direct dataset download access',
-                'KZG-verified data integrity proof',
-              ].map(item => (
-                <div key={item} className="flex items-start gap-2">
-                  <span className="text-cyan font-mono text-xs mt-0.5">→</span>
-                  <span className="font-mono text-xs text-dim">{item}</span>
-                </div>
-              ))}
-            </div>
-
-            <Link
-              to={'/verify/' + dataset.manifest_tx_hash}
-              className="font-mono text-xs text-dim hover:text-cyan transition-colors text-center block"
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 border-b border-zinc-800 pb-0">
+          {(['published', 'purchased'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`font-['Space_Mono'] text-sm px-5 py-3 border-b-2 transition-colors capitalize -mb-px ${
+                activeTab === tab
+                  ? 'border-[#00ffcc] text-[#00ffcc]'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
             >
-              verify dataset integrity ↗
-            </Link>
-
-          </div>
+              {tab === 'published'
+                ? `Published (${myDatasets.length})`
+                : `Purchased (${purchases.length})`}
+            </button>
+          ))}
         </div>
+
+        {/* Published Datasets */}
+        {activeTab === 'published' && (
+          <div>
+            {myDatasets.length === 0 ? (
+              <EmptyState
+                message="You haven't published any datasets yet."
+                cta="Publish Dataset"
+                href="/publish"
+              />
+            ) : (
+              <div className="space-y-3">
+                {myDatasets.map((d) => (
+                  <div
+                    key={d.id}
+                    className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <Link
+                          to={`/dataset/${d.id}`}
+                          className="font-['Syne'] font-semibold hover:text-[#00ffcc] transition-colors truncate"
+                        >
+                          {d.name}
+                        </Link>
+                        <span className="text-xs border border-zinc-700 text-zinc-400 rounded px-2 py-0.5 font-['Space_Mono'] uppercase shrink-0">
+                          {d.licenseType}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 font-['Space_Mono'] text-xs text-zinc-500">
+                        <span>{formatSize(d.fileSize)}</span>
+                        <span>{d.chunkCount} blobs</span>
+                        <span>{formatDate(d.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className="font-['Space_Mono'] text-sm text-[#00ffcc] font-semibold">
+                          {formatETH(d.priceWei)}
+                        </p>
+                        <p className="font-['Space_Mono'] text-xs text-zinc-600">per license</p>
+                      </div>
+                      <Link
+                        to={`/dataset/${d.id}`}
+                        className="border border-zinc-700 text-zinc-300 font-['Space_Mono'] text-xs px-3 py-2 rounded hover:border-[#00ffcc] hover:text-[#00ffcc] transition-colors"
+                      >
+                        View →
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Purchased Licenses */}
+        {activeTab === 'purchased' && (
+          <div>
+            {purchases.length === 0 ? (
+              <EmptyState
+                message="You haven't purchased any licenses yet."
+                cta="Browse Marketplace"
+                href="/marketplace"
+              />
+            ) : (
+              <div className="space-y-3">
+                {purchases.map((r) => (
+                  <div
+                    key={r.receiptTxHash}
+                    className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <Link
+                          to={`/dataset/${r.datasetId}`}
+                          className="font-['Syne'] font-semibold hover:text-[#00ffcc] transition-colors"
+                        >
+                          Dataset #{r.datasetId}
+                        </Link>
+                        <span className="text-xs border border-[#00ffcc]/40 text-[#00ffcc] rounded px-2 py-0.5 font-['Space_Mono'] uppercase shrink-0">
+                          {r.licenseType}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 font-['Space_Mono'] text-xs text-zinc-500">
+                        <span>Paid {formatETH(r.amountPaid)}</span>
+                        <span>{formatDate(r.purchasedAt)}</span>
+                      </div>
+                      <p className="font-['Space_Mono'] text-xs text-zinc-600 mt-1 truncate">
+                        Receipt: {r.receiptTxHash.slice(0, 18)}...{r.receiptTxHash.slice(-8)}
+                      </p>
+                    </div>
+
+                   <div className="flex items-center gap-2 shrink-0">
+  <Link
+    to={`/verify/${r.receiptTxHash}`}
+    className="border border-zinc-700 text-zinc-300 font-['Space_Mono'] text-xs px-3 py-2 rounded hover:border-[#00ffcc] hover:text-[#00ffcc] transition-colors"
+  >
+    Verify
+  </Link>
+
+  <a
+    href={`/api/datasets/${r.datasetId}/download`}
+    download
+    className="bg-[#00ffcc] text-black font-['Space_Mono'] text-xs font-bold px-3 py-2 rounded hover:bg-[#00ffcc]/90 transition-colors"
+  >
+    Download
+  </a>
+</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </main>
-  )
+    </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40">
+      <p className="font-['Space_Mono'] text-xs text-zinc-500 mb-2 uppercase tracking-wider">
+        {label}
+      </p>
+      <p className={`font-['Syne'] text-2xl font-bold ${accent ? 'text-[#00ffcc]' : 'text-white'}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function EmptyState({
+  message,
+  cta,
+  href,
+}: {
+  message: string;
+  cta: string;
+  href: string;
+}) {
+  return (
+    <div className="border border-zinc-800 border-dashed rounded-lg p-12 text-center">
+      <p className="text-zinc-500 font-['Space_Mono'] text-sm mb-4">{message}</p>
+      <Link
+        to={href}
+        className="inline-block bg-[#00ffcc] text-black font-['Space_Mono'] text-sm font-bold px-6 py-3 rounded hover:bg-[#00ffcc]/90 transition-colors"
+      >
+        {cta}
+      </Link>
+    </div>
+  );
 }

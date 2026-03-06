@@ -1,20 +1,41 @@
-# Node modules
-/node_modules
+# Environment files — never commit these
+.env
+.env.local
+.env.*.local
 
-# Compilation output
-/dist
+# Dependencies
+node_modules/
+**/node_modules/
 
-# pnpm deploy output
-/bundle
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
 
-# Hardhat Build Artifacts
-/artifacts
+# Hardhat / Foundry artifacts
+packages/contracts/artifacts/
+packages/contracts/cache/
+packages/contracts/out/
+packages/contracts/broadcast/
 
-# Hardhat compilation (v2) support directory
-/cache
+# Database
+packages/backend/data/
+*.db
+*.sqlite
 
-# Typechain output
-/types
+# Logs
+*.log
+logs/
+**/logs/
 
-# Hardhat coverage reports
-/coverage
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
