@@ -1,0 +1,284 @@
+import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
+import { getBlobKit } from '../blobkit';
+import { getDb } from '../db';
+import { logger } from '../logger';
+import { validateBlobSize, calculatePayloadHash, bytesToHex } from '@blobkit/sdk';
+
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
+const CHUNK_SIZE = 120 * 1024; // 120KB safe chunk size
+
+function chunkBuffer(buffer: Buffer): Buffer[] {
+  const chunks: Buffer[] = [];
+  for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+    chunks.push(buffer.slice(i, i + CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+// POST /api/datasets/upload
+router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const { name, description, priceWei, licenseType, creatorAddress } = req.body;
+    if (!name || !priceWei || !licenseType || !creatorAddress) {
+      return res.status(400).json({ error: 'Missing required fields: name, priceWei, licenseType, creatorAddress' });
+    }
+
+    const blobkit = await getBlobKit();
+    const fileBuffer = req.file.buffer;
+    const chunks = chunkBuffer(fileBuffer);
+
+    // File hash
+    const fileHash = 'sha256:' + crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+    // Estimate total cost
+    let totalCostWei = BigInt(0);
+    for (const chunk of chunks) {
+      const estimate = await blobkit.estimateCost(new Uint8Array(chunk));
+      totalCostWei += BigInt(estimate.totalETH);
+    }
+
+    const datasetId = uuidv4();
+    const db = getDb();
+
+    // Upload chunks
+    const chunkReceipts: { index: number; blobTxHash: string; blobHash: string; size: number }[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkUint8 = new Uint8Array(chunk);
+
+      validateBlobSize(chunkUint8);
+      const payloadHash = bytesToHex(calculatePayloadHash(chunkUint8) as unknown as Uint8Array);
+
+      const receipt = await blobkit.writeBlob(
+        chunkUint8,
+        { appId: 'blobfs', codec: 'application/octet-stream' }
+      );
+
+      // Poll until confirmed
+      let completed = false;
+      let attempts = 0;
+      while (!completed && attempts < 30) {
+        await new Promise(r => setTimeout(r, 2000));
+        const status = await blobkit.getJobStatus(receipt.jobId);
+        completed = status.completed;
+        attempts++;
+      }
+
+      if (!completed) {
+        logger.warn('Chunk job timed out', { jobId: receipt.jobId, chunkIndex: i });
+      }
+
+      db.prepare(`
+        INSERT INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        receipt.jobId,
+        receipt.blobTxHash || null,
+        completed ? 'confirmed' : 'pending',
+        datasetId,
+        'chunk',
+        Date.now(),
+        completed ? Date.now() : null
+      );
+
+      chunkReceipts.push({
+        index: i,
+        blobTxHash: receipt.blobTxHash || '',
+        blobHash: receipt.blobHash || '',
+        size: chunk.length,
+      });
+
+      logger.info('Chunk uploaded', { chunkIndex: i, total: chunks.length, txHash: receipt.blobTxHash });
+    }
+
+    // Build and upload manifest
+    const payloadHash = bytesToHex(calculatePayloadHash(new Uint8Array(fileBuffer)) as unknown as Uint8Array);
+    const manifest = {
+      type: 'blobfs-manifest',
+      version: '0.1.0',
+      name,
+      description: description || '',
+      contentType: req.file.mimetype,
+      totalSize: fileBuffer.length,
+      fileHash,
+      payloadHash,
+      uploader: creatorAddress,
+      uploadedAt: Math.floor(Date.now() / 1000),
+      licenseType,
+      priceWei,
+      chunks: chunkReceipts,
+    };
+
+    const manifestReceipt = await blobkit.writeBlob(
+      manifest,
+      { appId: 'blobfs', codec: 'application/json' }
+    );
+
+    // Poll manifest confirmation
+    let manifestConfirmed = false;
+    let attempts = 0;
+    while (!manifestConfirmed && attempts < 30) {
+      await new Promise(r => setTimeout(r, 2000));
+      const status = await blobkit.getJobStatus(manifestReceipt.jobId);
+      manifestConfirmed = status.completed;
+      attempts++;
+    }
+
+    db.prepare(`
+      INSERT INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      manifestReceipt.jobId,
+      manifestReceipt.blobTxHash || null,
+      manifestConfirmed ? 'confirmed' : 'pending',
+      datasetId,
+      'manifest',
+      Date.now(),
+      manifestConfirmed ? Date.now() : null
+    );
+
+    // Insert into datasets table
+    db.prepare(`
+      INSERT INTO datasets (
+        dataset_id, manifest_tx_hash, creator_address, name, description,
+        content_type, file_size, chunk_count, price_wei, license_type,
+        file_hash, payload_hash, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      datasetId,
+      manifestReceipt.blobTxHash || null,
+      creatorAddress,
+      name,
+      description || '',
+      req.file.mimetype,
+      fileBuffer.length,
+      chunks.length,
+      priceWei,
+      licenseType,
+      fileHash,
+      payloadHash,
+      Date.now()
+    );
+
+    logger.info('Dataset uploaded', { datasetId, manifestTxHash: manifestReceipt.blobTxHash });
+
+    return res.json({
+      datasetId,
+      manifestTxHash: manifestReceipt.blobTxHash,
+      chunkCount: chunks.length,
+      fileHash,
+      payloadHash,
+      estimatedCostWei: totalCostWei.toString(),
+    });
+
+  } catch (err: any) {
+    logger.error('Upload failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/datasets/publish
+router.post('/publish', async (req: Request, res: Response) => {
+  try {
+    const { datasetId, manifestTxHash, priceWei, licenseType } = req.body;
+    if (!datasetId || !manifestTxHash) {
+      return res.status(400).json({ error: 'Missing datasetId or manifestTxHash' });
+    }
+
+    const db = getDb();
+    db.prepare(`
+      UPDATE datasets SET manifest_tx_hash = ?, price_wei = ?, license_type = ?, active = 1
+      WHERE dataset_id = ?
+    `).run(manifestTxHash, priceWei, licenseType, datasetId);
+
+    logger.info('Dataset published', { datasetId, manifestTxHash });
+    return res.json({ success: true, datasetId, manifestTxHash });
+
+  } catch (err: any) {
+    logger.error('Publish failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/datasets
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const datasets = db.prepare(`
+      SELECT * FROM datasets WHERE active = 1 ORDER BY created_at DESC
+    `).all();
+    return res.json({ datasets });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/datasets/:id
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const dataset = db.prepare(`SELECT * FROM datasets WHERE dataset_id = ?`).get(req.params.id);
+    if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
+    return res.json({ dataset });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/datasets/:id/download
+router.get('/:id/download', async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const dataset = db.prepare(`SELECT * FROM datasets WHERE dataset_id = ?`).get(req.params.id) as any;
+    if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
+
+    const blobkit = await getBlobKit();
+    const manifest = await blobkit.readBlobAsJSON(dataset.manifest_tx_hash) as any;
+
+    const chunks: Uint8Array[] = [];
+    for (const chunk of manifest.chunks) {
+      const result = await blobkit.readBlob(chunk.blobTxHash);
+      chunks.push(result.data);
+    }
+
+    const fileBuffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
+    res.setHeader('Content-Type', dataset.content_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${dataset.name}"`);
+    return res.send(fileBuffer);
+
+  } catch (err: any) {
+    logger.error('Download failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/datasets/:id/estimate
+router.post('/:id/estimate', async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const dataset = db.prepare(`SELECT * FROM datasets WHERE dataset_id = ?`).get(req.params.id) as any;
+    if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
+
+    const blobkit = await getBlobKit();
+    const sampleBytes = new Uint8Array(Math.min(dataset.file_size, CHUNK_SIZE));
+    const estimate = await blobkit.estimateCost(sampleBytes);
+
+    return res.json({
+      datasetId: req.params.id,
+      priceWei: dataset.price_wei,
+      estimatedBlobCost: estimate,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
