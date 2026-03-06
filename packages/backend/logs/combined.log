@@ -1,0 +1,8 @@
+2026-03-06T19:14:01.379Z [INFO] Config validated 
+2026-03-06T19:14:01.416Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:14:01.416Z [INFO] Database initialized 
+2026-03-06T19:14:01.417Z [INFO] Initializing KZG... 
+2026-03-06T19:14:16.881Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:14:18.195Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:14:18.195Z [INFO] BlobKit initialized 
+2026-03-06T19:14:18.197Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
