@@ -78,7 +78,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       });
 
       // Poll until confirmed
-      let completed = false;
+      const completed = !!receipt.blobTxHash;
       let chunkAttempts = 0;
       while (!completed && chunkAttempts < 30) {
         await new Promise((r) => setTimeout(r, 2000));
@@ -145,7 +145,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     });
 
     // Poll manifest confirmation
-    let manifestConfirmed = false;
+    const manifestConfirmed = !!manifestReceipt.blobTxHash;
     let manifestAttempts = 0;
     while (!manifestConfirmed && manifestAttempts < 30) {
       await new Promise((r) => setTimeout(r, 2000));

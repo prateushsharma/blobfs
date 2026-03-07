@@ -24,10 +24,10 @@ export async function initBlobKit(): Promise<void> {
     {
       rpcUrl: config.rpcUrl,
       chainId: config.chainId,
-      proxyUrl: config.proxyUrl,
       archiveUrl: config.archiveUrl,
-      escrowContract: config.escrowContract,
+      eip7594: false,  // force EIP-4844, ethers Wallet doesn't support signRawTransaction
       logLevel: 'info',
+      escrowContract: '0x742d35cc6634C0532925A3B844bc9E7595f2BD77',
       metricsHooks: {
         onBlobWrite: (size, duration, success) =>
           trackMetric('write', size, duration, success),
@@ -50,6 +50,5 @@ export async function initBlobKit(): Promise<void> {
     address,
     balance: ethers.formatEther(balance) + ' ETH',
     chainId: config.chainId,
-    proxy: config.proxyUrl,
   });
 }

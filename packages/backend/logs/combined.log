@@ -79,3 +79,119 @@
 2026-03-06T19:32:32.348Z [INFO] BlobKit initialized 
 2026-03-06T19:32:32.349Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
 2026-03-06T19:32:44.720Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T19:36:36.997Z [INFO] Config validated 
+2026-03-06T19:36:37.001Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:36:37.001Z [INFO] Database initialized 
+2026-03-06T19:36:37.001Z [INFO] Initializing KZG... 
+2026-03-06T19:36:52.381Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:36:53.439Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:36:53.439Z [INFO] BlobKit initialized 
+2026-03-06T19:36:53.441Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:37:26.136Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T19:42:47.643Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T19:44:45.016Z [INFO] Config validated 
+2026-03-06T19:44:45.019Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:44:45.019Z [INFO] Database initialized 
+2026-03-06T19:44:45.020Z [INFO] Initializing KZG... 
+2026-03-06T19:45:00.537Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:45:01.585Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:45:01.585Z [INFO] BlobKit initialized 
+2026-03-06T19:45:01.586Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:45:14.241Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-06T19:52:42.686Z [INFO] Config validated 
+2026-03-06T19:52:42.691Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:52:42.691Z [INFO] Database initialized 
+2026-03-06T19:52:42.692Z [INFO] Initializing KZG... 
+2026-03-06T19:52:57.976Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:52:58.724Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:52:58.725Z [INFO] BlobKit initialized 
+2026-03-06T19:52:58.726Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:53:08.958Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-06T19:54:55.911Z [INFO] Config validated 
+2026-03-06T19:54:55.915Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:54:55.915Z [INFO] Database initialized 
+2026-03-06T19:54:55.915Z [INFO] Initializing KZG... 
+2026-03-06T19:55:11.262Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:55:11.667Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:55:11.667Z [INFO] BlobKit initialized 
+2026-03-06T19:55:11.668Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:55:20.817Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Payment failed: could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-06T19:56:05.391Z [INFO] Config validated 
+2026-03-06T19:56:05.394Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:56:05.394Z [INFO] Database initialized 
+2026-03-06T19:56:05.394Z [INFO] Initializing KZG... 
+2026-03-06T19:56:20.752Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:56:20.936Z [INFO] Config validated 
+2026-03-06T19:56:20.939Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:56:20.939Z [INFO] Database initialized 
+2026-03-06T19:56:20.939Z [INFO] Initializing KZG... 
+2026-03-06T19:56:36.334Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:56:36.736Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111}
+2026-03-06T19:56:36.736Z [INFO] BlobKit initialized 
+2026-03-06T19:56:36.737Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:56:48.344Z [ERROR] Upload failed {"error":"Failed to write blob after 3 attempts: Failed to submit blob trx: signer.signRawTransaction is not a function"}
+2026-03-06T19:57:29.161Z [INFO] Config validated 
+2026-03-06T19:57:29.164Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T19:57:29.165Z [INFO] Database initialized 
+2026-03-06T19:57:29.165Z [INFO] Initializing KZG... 
+2026-03-06T19:57:44.489Z [INFO] Creating BlobKit instance... 
+2026-03-06T19:57:44.870Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731867644814164 ETH","chainId":11155111}
+2026-03-06T19:57:44.870Z [INFO] BlobKit initialized 
+2026-03-06T19:57:44.871Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T19:58:29.135Z [ERROR] Upload failed {"error":"bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T19:59:28.556Z [ERROR] Upload failed {"error":"bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T20:00:41.842Z [ERROR] Upload failed {"error":"bad address checksum (argument=\"address\", value=\"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD77\", code=INVALID_ARGUMENT, version=6.16.0)"}
+2026-03-06T20:02:05.431Z [INFO] Config validated 
+2026-03-06T20:02:05.435Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T20:02:05.435Z [INFO] Database initialized 
+2026-03-06T20:02:05.435Z [INFO] Initializing KZG... 
+2026-03-06T20:02:20.863Z [INFO] Creating BlobKit instance... 
+2026-03-06T20:02:21.250Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731804469016948 ETH","chainId":11155111}
+2026-03-06T20:02:21.250Z [INFO] BlobKit initialized 
+2026-03-06T20:02:21.251Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T20:02:51.674Z [INFO] Config validated 
+2026-03-06T20:02:51.677Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T20:02:51.677Z [INFO] Database initialized 
+2026-03-06T20:02:51.677Z [INFO] Initializing KZG... 
+2026-03-06T20:03:06.990Z [INFO] Creating BlobKit instance... 
+2026-03-06T20:03:07.825Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731804469016948 ETH","chainId":11155111}
+2026-03-06T20:03:07.825Z [INFO] BlobKit initialized 
+2026-03-06T20:03:07.826Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":"https://proxy-sepolia.blobkit.org"}
+2026-03-06T20:03:27.151Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-06T20:04:17.370Z [INFO] Config validated 
+2026-03-06T20:04:17.373Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T20:04:17.373Z [INFO] Database initialized 
+2026-03-06T20:04:17.373Z [INFO] Initializing KZG... 
+2026-03-06T20:04:32.723Z [INFO] Creating BlobKit instance... 
+2026-03-06T20:04:32.904Z [INFO] Config validated 
+2026-03-06T20:04:32.907Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T20:04:32.907Z [INFO] Database initialized 
+2026-03-06T20:04:32.907Z [INFO] Initializing KZG... 
+2026-03-06T20:04:48.379Z [INFO] Creating BlobKit instance... 
+2026-03-06T20:04:48.779Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731783368158404 ETH","chainId":11155111}
+2026-03-06T20:04:48.780Z [INFO] BlobKit initialized 
+2026-03-06T20:04:48.781Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-06T20:05:04.400Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-06T20:07:53.421Z [INFO] Config validated 
+2026-03-06T20:07:53.424Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-06T20:07:53.424Z [INFO] Database initialized 
+2026-03-06T20:07:53.424Z [INFO] Initializing KZG... 
+2026-03-06T20:08:08.730Z [INFO] Creating BlobKit instance... 
+2026-03-06T20:08:09.174Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731762273096572 ETH","chainId":11155111}
+2026-03-06T20:08:09.174Z [INFO] BlobKit initialized 
+2026-03-06T20:08:09.175Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-06T20:08:29.294Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-07T09:10:03.493Z [INFO] Config validated 
+2026-03-07T09:10:03.503Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:10:03.504Z [INFO] Database initialized 
+2026-03-07T09:10:03.504Z [INFO] Initializing KZG... 
+2026-03-07T09:10:18.935Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:10:19.455Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731741197688692 ETH","chainId":11155111}
+2026-03-07T09:10:19.455Z [INFO] BlobKit initialized 
+2026-03-07T09:10:19.456Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-07T09:11:14.348Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0x3d347323664b1aaf10e5ce2463017cc90aee9ddb569274f288f0819129e01978"}
+2026-03-07T09:11:26.634Z [INFO] Dataset uploaded {"datasetId":"eb05ee34-aaa0-453b-b6d1-d7e83f1299fa","manifestTxHash":"0xbf168432bf315318bfefe9d6ed6067d5afc62f2f8160eaa9204df77b450c53ea"}
+2026-03-07T09:11:39.656Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0x14790b4e9f22992953e617bda928dbcb016cec50400f99fc7b4736072bca7f6a"}
+2026-03-07T09:11:50.775Z [INFO] Dataset uploaded {"datasetId":"cb857e23-0369-4b57-b003-e2242055248e","manifestTxHash":"0xe4d30856f8808180ecead39b50ac0ee48c3c8e7d91ce384b59e6440b51a1324f"}
+2026-03-07T09:13:01.398Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0x39cacc1c491c708ffce503f6a3b4ddf27a299a45ca0147fa3bab4b7711e2ece5"}
+2026-03-07T09:13:14.146Z [INFO] Dataset uploaded {"datasetId":"3922c426-7c62-490a-a351-d76584584492","manifestTxHash":"0xdbba54b78b9a4d8dca3da6aaa5d70b97be1342e799dd0db084b6e4c3b2bb1718"}
