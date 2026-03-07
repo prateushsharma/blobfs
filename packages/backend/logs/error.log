@@ -18,3 +18,9 @@
 2026-03-06T20:05:04.400Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
 2026-03-06T20:08:29.294Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
 2026-03-07T09:34:15.597Z [ERROR] Upload failed {"error":"UNIQUE constraint failed: blob_jobs.job_id"}
+2026-03-07T13:44:20.009Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x011949f252ca15ba80dfd6fa1481c46095bcb483643f51e01ca0ccbf883592d5"}
+2026-03-07T13:44:20.010Z [ERROR] Blob read failed {"error":"Blob not found: 0x011949f252ca15ba80dfd6fa1481c46095bcb483643f51e01ca0ccbf883592d5"}
+2026-03-07T13:46:57.425Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
+2026-03-07T13:46:57.425Z [ERROR] Blob read failed {"error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
+2026-03-07T13:50:01.392Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
+2026-03-07T13:50:01.392Z [ERROR] Blob read failed {"error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}

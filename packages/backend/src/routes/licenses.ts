@@ -276,5 +276,110 @@ router.get('/stats/:datasetId', async (req: Request, res: Response) => {
     return res.status(500).json({ error: err.message });
   }
 });
+router.post('/prepare', async (req: Request, res: Response) => {
+  try {
+    const { datasetId, buyerAddress } = req.body;
+    if (!datasetId || !buyerAddress) return res.status(400).json({ error: 'Missing datasetId or buyerAddress' });
+    if (!isValidAddress(buyerAddress)) return res.status(400).json({ error: 'Invalid buyer address' });
 
+    const normalizedBuyer = buyerAddress.toLowerCase();
+    const db = getDb();
+
+    const dataset = db.prepare(`SELECT * FROM datasets WHERE dataset_id = ?`).get(datasetId) as any;
+    if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
+
+    const existing = db.prepare(`SELECT * FROM purchases WHERE dataset_id = ? AND buyer_address = ?`).get(datasetId, normalizedBuyer);
+    if (existing) return res.status(409).json({ error: 'Already licensed' });
+
+    const blobkit = await getBlobKit();
+    const receiptData = {
+      type: 'blobfs-receipt',
+      version: '0.1.0',
+      datasetId,
+      manifestTxHash: dataset.manifest_tx_hash,
+      fileHash: dataset.file_hash,
+      payloadHash: dataset.payload_hash,
+      buyer: normalizedBuyer,
+      seller: dataset.creator_address,
+      amountPaid: dataset.price_wei,
+      licenseType: dataset.license_type,
+      purchasedAt: Math.floor(Date.now() / 1000),
+      ethTxHash: null,
+    };
+
+    const blobReceipt = await blobkit.writeBlob(receiptData, { appId: 'blobfs-receipt', codec: 'application/json' });
+
+    let confirmed = !!blobReceipt.blobTxHash;
+    let attempts = 0;
+    while (!confirmed && attempts < 30) {
+      await new Promise(r => setTimeout(r, 2000));
+      const status = await blobkit.getJobStatus(blobReceipt.jobId);
+      confirmed = status.completed;
+      attempts++;
+    }
+
+    if (!confirmed || !blobReceipt.blobTxHash) {
+      return res.status(500).json({ error: 'Receipt blob failed to confirm' });
+    }
+
+    db.prepare(`
+      INSERT OR REPLACE INTO purchases (dataset_id, buyer_address, receipt_tx_hash, amount_wei, tx_hash, purchased_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(datasetId, normalizedBuyer, blobReceipt.blobTxHash, dataset.price_wei, null, Date.now());
+
+    logger.info('License prepared', { datasetId, buyerAddress: normalizedBuyer, receiptTxHash: blobReceipt.blobTxHash });
+
+    return res.json({ receiptTxHash: blobReceipt.blobTxHash, priceWei: dataset.price_wei, datasetId });
+
+  } catch (err: any) {
+    logger.error('Prepare failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/confirm', async (req: Request, res: Response) => {
+  try {
+    const { datasetId, buyerAddress, paymentTxHash, receiptTxHash } = req.body;
+    if (!datasetId || !buyerAddress || !paymentTxHash || !receiptTxHash) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (!isValidAddress(buyerAddress)) return res.status(400).json({ error: 'Invalid buyer address' });
+
+    const normalizedBuyer = buyerAddress.toLowerCase();
+    const db = getDb();
+
+    const purchase = db.prepare(`
+      SELECT * FROM purchases WHERE dataset_id = ? AND buyer_address = ? AND receipt_tx_hash = ?
+    `).get(datasetId, normalizedBuyer, receiptTxHash) as any;
+    if (!purchase) return res.status(404).json({ error: 'No pending purchase found' });
+
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const tx = await provider.getTransaction(paymentTxHash);
+    if (!tx) return res.status(400).json({ error: 'Payment transaction not found' });
+    if (tx.to?.toLowerCase() !== config.licenseMarketAddress.toLowerCase()) {
+      return res.status(400).json({ error: 'Transaction not sent to LicenseMarket contract' });
+    }
+
+    const txReceipt = await provider.getTransactionReceipt(paymentTxHash);
+    if (!txReceipt || txReceipt.status !== 1) {
+      return res.status(400).json({ error: 'Payment transaction failed or pending' });
+    }
+
+    const dataset = db.prepare(`SELECT * FROM datasets WHERE dataset_id = ?`).get(datasetId) as any;
+    if (tx.value < BigInt(dataset.price_wei)) {
+      return res.status(400).json({ error: 'Insufficient payment' });
+    }
+
+    db.prepare(`UPDATE purchases SET tx_hash = ? WHERE dataset_id = ? AND buyer_address = ? AND receipt_tx_hash = ?`)
+      .run(paymentTxHash, datasetId, normalizedBuyer, receiptTxHash);
+
+    logger.info('License confirmed', { datasetId, buyerAddress: normalizedBuyer, paymentTxHash });
+
+    return res.json({ success: true, datasetId, buyerAddress: normalizedBuyer, receiptTxHash, licenseType: dataset.license_type });
+
+  } catch (err: any) {
+    logger.error('Confirm failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
 export default router;
