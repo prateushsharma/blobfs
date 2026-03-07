@@ -195,3 +195,8 @@
 2026-03-07T09:11:50.775Z [INFO] Dataset uploaded {"datasetId":"cb857e23-0369-4b57-b003-e2242055248e","manifestTxHash":"0xe4d30856f8808180ecead39b50ac0ee48c3c8e7d91ce384b59e6440b51a1324f"}
 2026-03-07T09:13:01.398Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0x39cacc1c491c708ffce503f6a3b4ddf27a299a45ca0147fa3bab4b7711e2ece5"}
 2026-03-07T09:13:14.146Z [INFO] Dataset uploaded {"datasetId":"3922c426-7c62-490a-a351-d76584584492","manifestTxHash":"0xdbba54b78b9a4d8dca3da6aaa5d70b97be1342e799dd0db084b6e4c3b2bb1718"}
+2026-03-07T09:22:24.804Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0xd5cc78f2869b7120eb37ef091aad996dc31fe1e64c7c0fb4ce6f1797d20cfdbd"}
+2026-03-07T09:22:40.275Z [INFO] Dataset uploaded {"datasetId":"dc7f28ce-9030-44cc-82c2-b18eb0f98b81","manifestTxHash":"0x1d628baed5d4ec487bc4cf601719913cf9ca88d50f4c97007740d1c0927f9e2f"}
+2026-03-07T09:24:27.951Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0xf091213c88296b264cfa6ee42dfa474c9d9119475e79b0facd1a69e2baae833a"}
+2026-03-07T09:24:39.702Z [INFO] Dataset uploaded {"datasetId":"ce82ec0a-5d71-4672-9a21-2af4c6bf9c20","manifestTxHash":"0x2725e17d325215d4a549cc3fb45c8eca24e5f4dc1fed2db10050bac073f38ad0"}
+2026-03-07T09:24:39.716Z [INFO] Dataset published {"datasetId":"ce82ec0a-5d71-4672-9a21-2af4c6bf9c20","manifestTxHash":"0x2725e17d325215d4a549cc3fb45c8eca24e5f4dc1fed2db10050bac073f38ad0"}
