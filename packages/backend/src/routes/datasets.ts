@@ -20,6 +20,25 @@ function chunkBuffer(buffer: Buffer): Buffer[] {
   return chunks;
 }
 
+// mapper function
+function toDatasetDTO(row: any) {
+  return {
+    id: row.dataset_id,
+    name: row.name,
+    description: row.description,
+    contentType: row.content_type,
+    fileSize: row.file_size,
+    chunkCount: row.chunk_count,
+    priceWei: row.price_wei,
+    licenseType: row.license_type,
+    creatorAddress: row.creator_address,
+    manifestTxHash: row.manifest_tx_hash,
+    fileHash: row.file_hash,
+    createdAt: row.created_at,
+    active: !!row.active,
+  };
+}
+
 // POST /api/datasets/upload
 router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
   try {
@@ -92,7 +111,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       }
 
       db.prepare(`
-        INSERT INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
+        INSERT OR REPLACE INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         receipt.jobId,
@@ -155,7 +174,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     }
 
     db.prepare(`
-      INSERT INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
+      INSERT OR REPLACE INTO blob_jobs (job_id, blob_tx_hash, status, dataset_id, job_type, created_at, confirmed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       manifestReceipt.jobId,
@@ -241,7 +260,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const datasets = db.prepare(`
       SELECT * FROM datasets WHERE active = 1 ORDER BY created_at DESC
     `).all();
-    return res.json(datasets);
+   return res.json(datasets.map(toDatasetDTO));
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -255,7 +274,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       `SELECT * FROM datasets WHERE dataset_id = ?`
     ).get(req.params.id);
     if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
-    return res.json(dataset);
+   return res.json(toDatasetDTO(dataset));
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

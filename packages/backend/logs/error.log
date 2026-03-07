@@ -17,3 +17,4 @@
 2026-03-06T20:03:27.151Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
 2026-03-06T20:05:04.400Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
 2026-03-06T20:08:29.294Z [ERROR] Upload failed {"error":"could not decode result data (value=\"0x\", info={ \"method\": \"getJob\", \"signature\": \"getJob(bytes32)\" }, code=BAD_DATA, version=6.16.0)"}
+2026-03-07T09:34:15.597Z [ERROR] Upload failed {"error":"UNIQUE constraint failed: blob_jobs.job_id"}

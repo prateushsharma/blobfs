@@ -200,3 +200,51 @@
 2026-03-07T09:24:27.951Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0xf091213c88296b264cfa6ee42dfa474c9d9119475e79b0facd1a69e2baae833a"}
 2026-03-07T09:24:39.702Z [INFO] Dataset uploaded {"datasetId":"ce82ec0a-5d71-4672-9a21-2af4c6bf9c20","manifestTxHash":"0x2725e17d325215d4a549cc3fb45c8eca24e5f4dc1fed2db10050bac073f38ad0"}
 2026-03-07T09:24:39.716Z [INFO] Dataset published {"datasetId":"ce82ec0a-5d71-4672-9a21-2af4c6bf9c20","manifestTxHash":"0x2725e17d325215d4a549cc3fb45c8eca24e5f4dc1fed2db10050bac073f38ad0"}
+2026-03-07T09:28:44.667Z [INFO] Config validated 
+2026-03-07T09:28:44.677Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:28:44.678Z [INFO] Database initialized 
+2026-03-07T09:28:44.678Z [INFO] Initializing KZG... 
+2026-03-07T09:29:00.069Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:29:00.258Z [INFO] Config validated 
+2026-03-07T09:29:00.261Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:29:00.261Z [INFO] Database initialized 
+2026-03-07T09:29:00.261Z [INFO] Initializing KZG... 
+2026-03-07T09:29:15.485Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:29:15.999Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731506481647812 ETH","chainId":11155111}
+2026-03-07T09:29:15.999Z [INFO] BlobKit initialized 
+2026-03-07T09:29:16.001Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-07T09:32:42.946Z [INFO] Config validated 
+2026-03-07T09:32:42.949Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:32:42.949Z [INFO] Database initialized 
+2026-03-07T09:32:42.950Z [INFO] Initializing KZG... 
+2026-03-07T09:32:58.256Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:32:58.434Z [INFO] Config validated 
+2026-03-07T09:32:58.438Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:32:58.438Z [INFO] Database initialized 
+2026-03-07T09:32:58.438Z [INFO] Initializing KZG... 
+2026-03-07T09:33:13.704Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:33:13.879Z [INFO] Config validated 
+2026-03-07T09:33:13.882Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:33:13.883Z [INFO] Database initialized 
+2026-03-07T09:33:13.883Z [INFO] Initializing KZG... 
+2026-03-07T09:33:29.102Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:33:29.412Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731506481647812 ETH","chainId":11155111}
+2026-03-07T09:33:29.413Z [INFO] BlobKit initialized 
+2026-03-07T09:33:29.414Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-07T09:34:15.597Z [ERROR] Upload failed {"error":"UNIQUE constraint failed: blob_jobs.job_id"}
+2026-03-07T09:35:38.303Z [INFO] Config validated 
+2026-03-07T09:35:38.306Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:35:38.307Z [INFO] Database initialized 
+2026-03-07T09:35:38.307Z [INFO] Initializing KZG... 
+2026-03-07T09:35:53.738Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:35:53.930Z [INFO] Config validated 
+2026-03-07T09:35:53.933Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-07T09:35:53.933Z [INFO] Database initialized 
+2026-03-07T09:35:53.933Z [INFO] Initializing KZG... 
+2026-03-07T09:36:09.407Z [INFO] Creating BlobKit instance... 
+2026-03-07T09:36:09.790Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731484516663268 ETH","chainId":11155111}
+2026-03-07T09:36:09.790Z [INFO] BlobKit initialized 
+2026-03-07T09:36:09.791Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-07T09:36:26.278Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0xb86a63f0304115d31e50cbd561213591c92c0663e78dced9385248fb25dc4fd4"}
+2026-03-07T09:36:39.351Z [INFO] Dataset uploaded {"datasetId":"f85ac01f-76a5-49ea-8640-ef911b971597","manifestTxHash":"0xdc52354add93f428af3033f313bb2815d846773dd501cc120671896d011d2048"}
+2026-03-07T09:36:39.373Z [INFO] Dataset published {"datasetId":"f85ac01f-76a5-49ea-8640-ef911b971597","manifestTxHash":"0xdc52354add93f428af3033f313bb2815d846773dd501cc120671896d011d2048"}
