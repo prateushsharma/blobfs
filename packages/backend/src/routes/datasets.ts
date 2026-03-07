@@ -5,7 +5,8 @@ import crypto from 'crypto';
 import { getBlobKit } from '../blobkit';
 import { getDb } from '../db';
 import { logger } from '../logger';
-import { validateBlobSize, calculatePayloadHash, bytesToHex } from '@blobkit/sdk';
+import { validateBlobSize, calculatePayloadHash } from '@blobkit/sdk';
+// ✅ FIX: Removed bytesToHex import — calculatePayloadHash already returns a hex string
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
@@ -20,7 +21,6 @@ function chunkBuffer(buffer: Buffer): Buffer[] {
   return chunks;
 }
 
-// mapper function
 function toDatasetDTO(row: any) {
   return {
     id: row.dataset_id,
@@ -44,7 +44,6 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   try {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    // Accept creatorAddress from body OR header
     const creatorAddress =
       req.body.creatorAddress ||
       (req.headers['x-wallet-address'] as string);
@@ -61,10 +60,8 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const fileBuffer = req.file.buffer;
     const chunks = chunkBuffer(fileBuffer);
 
-    // File hash
     const fileHash = 'sha256:' + crypto.createHash('sha256').update(fileBuffer).digest('hex');
 
-    // Estimate total cost — use float not BigInt since totalETH is a decimal string
     let totalCostETH = 0;
     for (const chunk of chunks) {
       const estimate = await blobkit.estimateCost(chunk.length);
@@ -74,7 +71,6 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const datasetId = uuidv4();
     const db = getDb();
 
-    // Upload chunks
     const chunkReceipts: {
       index: number;
       blobTxHash: string;
@@ -87,26 +83,26 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       const chunkUint8 = new Uint8Array(chunk);
 
       validateBlobSize(chunkUint8);
-      const payloadHash = bytesToHex(
-        calculatePayloadHash(chunkUint8) as unknown as Uint8Array
-      );
+
+      // ✅ FIX: calculatePayloadHash returns a hex string directly — no bytesToHex wrapper needed
+      const chunkPayloadHash = calculatePayloadHash(chunkUint8) as string;
 
       const receipt = await blobkit.writeBlob(chunkUint8, {
         appId: 'blobfs',
         codec: 'application/octet-stream',
       });
 
-      // Poll until confirmed
-      const completed = !!receipt.blobTxHash;
+      // ✅ FIX: Use let, not const — needs reassignment in polling loop
+      let chunkCompleted = !!receipt.blobTxHash;
       let chunkAttempts = 0;
-      while (!completed && chunkAttempts < 30) {
+      while (!chunkCompleted && chunkAttempts < 30) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await blobkit.getJobStatus(receipt.jobId);
-        completed = status.completed;
+        chunkCompleted = status.completed;
         chunkAttempts++;
       }
 
-      if (!completed) {
+      if (!chunkCompleted) {
         logger.warn('Chunk job timed out', { jobId: receipt.jobId, chunkIndex: i });
       }
 
@@ -116,11 +112,11 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       `).run(
         receipt.jobId,
         receipt.blobTxHash || null,
-        completed ? 'confirmed' : 'pending',
+        chunkCompleted ? 'confirmed' : 'pending',
         datasetId,
         'chunk',
         Date.now(),
-        completed ? Date.now() : null
+        chunkCompleted ? Date.now() : null
       );
 
       chunkReceipts.push({
@@ -134,13 +130,12 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         chunkIndex: i,
         total: chunks.length,
         txHash: receipt.blobTxHash,
+        payloadHash: chunkPayloadHash,
       });
     }
 
-    // Build and upload manifest
-    const payloadHash = bytesToHex(
-      calculatePayloadHash(new Uint8Array(fileBuffer)) as unknown as Uint8Array
-    );
+    // ✅ FIX: calculatePayloadHash returns hex string directly
+    const payloadHash = calculatePayloadHash(new Uint8Array(fileBuffer)) as string;
 
     const manifest = {
       type: 'blobfs-manifest',
@@ -163,8 +158,8 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       codec: 'application/json',
     });
 
-    // Poll manifest confirmation
-    const manifestConfirmed = !!manifestReceipt.blobTxHash;
+    // ✅ FIX: Use let, not const
+    let manifestConfirmed = !!manifestReceipt.blobTxHash;
     let manifestAttempts = 0;
     while (!manifestConfirmed && manifestAttempts < 30) {
       await new Promise((r) => setTimeout(r, 2000));
@@ -186,7 +181,6 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       manifestConfirmed ? Date.now() : null
     );
 
-    // Insert into datasets table
     db.prepare(`
       INSERT INTO datasets (
         dataset_id, manifest_tx_hash, creator_address, name, description,
@@ -212,6 +206,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     logger.info('Dataset uploaded', {
       datasetId,
       manifestTxHash: manifestReceipt.blobTxHash,
+      payloadHash,
     });
 
     return res.json({
@@ -260,7 +255,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const datasets = db.prepare(`
       SELECT * FROM datasets WHERE active = 1 ORDER BY created_at DESC
     `).all();
-   return res.json(datasets.map(toDatasetDTO));
+    return res.json(datasets.map(toDatasetDTO));
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -274,7 +269,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       `SELECT * FROM datasets WHERE dataset_id = ?`
     ).get(req.params.id);
     if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
-   return res.json(toDatasetDTO(dataset));
+    return res.json(toDatasetDTO(dataset));
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -319,8 +314,7 @@ router.post('/:id/estimate', async (req: Request, res: Response) => {
     if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
 
     const blobkit = await getBlobKit();
-    const sampleBytes = new Uint8Array(Math.min(dataset.file_size, CHUNK_SIZE));
-   const estimate = await blobkit.estimateCost(Math.min(dataset.file_size, CHUNK_SIZE));
+    const estimate = await blobkit.estimateCost(Math.min(dataset.file_size, CHUNK_SIZE));
 
     return res.json({
       datasetId: req.params.id,
