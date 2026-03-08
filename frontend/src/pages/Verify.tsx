@@ -7,11 +7,8 @@ type VerifyState = 'idle' | 'loading' | 'found' | 'invalid' | 'error';
 
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   });
 }
 
@@ -48,39 +45,41 @@ export default function Verify() {
     setErrorMsg('');
 
     try {
+      // Single readBlob call
       const blob = await readBlob(cleaned);
-      setRawBlob(blob.data);
-      setBlobSource(blob.source);
 
-      let parsed: any;
-      try {
-        parsed = JSON.parse(blob.data);
-      } catch {
-        setState('found');
-        return;
-      }
+      // blob.data may be a string or already-parsed object depending on backend
+      const parsed: any = typeof blob.data === 'string'
+        ? JSON.parse(blob.data)
+        : blob.data;
+
+      // Store raw for display — always stringify for React state
+      setRawBlob(typeof blob.data === 'string' ? blob.data : JSON.stringify(blob.data, null, 2));
+      setBlobSource(blob.source ?? 'beacon');
 
       if (
-        parsed.type === 'blobfs-receipt' &&
-        parsed.datasetId &&
-        parsed.buyer &&
-        parsed.seller
+        parsed?.type === 'blobfs-receipt' &&
+        parsed?.datasetId &&
+        parsed?.buyer &&
+        parsed?.seller
       ) {
+        // Try to cross-verify against backend DB
         try {
-          const { licensed, receipt: r } = await verifyLicense(
-            parsed.datasetId,
-            parsed.buyer
-          );
+          const { licensed, receipt: r } = await verifyLicense(parsed.datasetId, parsed.buyer);
           if (licensed && r) {
             setReceipt(r);
             setState('found');
             return;
           }
-        } catch {}
+        } catch {
+          // DB verify failed — fall through to use blob data directly
+        }
 
+        // Use blob receipt data directly as proof
         setReceipt(parsed as LicenseReceipt);
         setState('found');
       } else {
+        // Valid blob but not a BlobFS receipt
         setState('found');
       }
     } catch (e: any) {
@@ -97,7 +96,7 @@ export default function Verify() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white px-6 py-12">
+    <div className="min-h-screen bg-[#0a0a0a] text-white px-6 pt-28 pb-12">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -140,9 +139,7 @@ export default function Verify() {
         {/* Error */}
         {(state === 'error' || state === 'invalid') && (
           <div className="border border-red-800 bg-red-900/20 rounded-lg p-6">
-            <p className="text-red-400 font-['Space_Mono'] text-sm mb-2">
-              ⚠ Verification Failed
-            </p>
+            <p className="text-red-400 font-['Space_Mono'] text-sm mb-2">⚠ Verification Failed</p>
             <p className="text-zinc-400 font-['Space_Mono'] text-xs">{errorMsg}</p>
           </div>
         )}
@@ -150,26 +147,20 @@ export default function Verify() {
         {/* Found: BlobFS Receipt */}
         {state === 'found' && receipt && (
           <div className="space-y-4">
-            {/* Valid badge */}
             <div className="flex items-center gap-3 border border-[#00ffcc]/40 bg-[#00ffcc]/5 rounded-lg px-5 py-4">
               <div className="w-8 h-8 rounded-full bg-[#00ffcc]/20 border border-[#00ffcc] flex items-center justify-center shrink-0">
                 <span className="text-[#00ffcc] text-sm">✓</span>
               </div>
               <div>
-                <p className="font-['Syne'] font-bold text-[#00ffcc]">
-                  Valid License Receipt
-                </p>
+                <p className="font-['Syne'] font-bold text-[#00ffcc]">Valid License Receipt</p>
                 <p className="font-['Space_Mono'] text-xs text-zinc-400 mt-0.5">
                   Stored on Ethereum blobspace · Source: {blobSource}
                 </p>
               </div>
             </div>
 
-            {/* License details */}
             <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
-              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
-                License Details
-              </h2>
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">License Details</h2>
               <div className="space-y-4 font-['Space_Mono'] text-xs">
                 <VerifyRow label="Dataset ID" value={receipt.datasetId} />
                 <VerifyRow label="License Type" value={receipt.licenseType} badge />
@@ -178,37 +169,29 @@ export default function Verify() {
               </div>
             </div>
 
-            {/* Addresses */}
             <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
-              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
-                On-Chain Addresses
-              </h2>
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">On-Chain Addresses</h2>
               <div className="space-y-4 font-['Space_Mono'] text-xs">
                 <VerifyRow label="Buyer" value={receipt.buyer} address />
                 <VerifyRow label="Seller" value={receipt.seller} address />
                 <VerifyRow label="Manifest TX" value={receipt.manifestTxHash} tx />
                 <VerifyRow label="Payment TX" value={receipt.ethTxHash} tx />
-                <VerifyRow label="Receipt Blob TX" value={receipt.receiptTxHash} tx />
+                <VerifyRow label="Receipt Blob TX" value={receipt.receiptTxHash ?? ''} tx />
               </div>
             </div>
 
-            {/* Hashes */}
             <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/40">
-              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">
-                Data Integrity
-              </h2>
+              <h2 className="font-['Syne'] text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-5">Data Integrity</h2>
               <div className="space-y-4 font-['Space_Mono'] text-xs">
                 <VerifyRow label="File Hash" value={receipt.fileHash} />
                 <VerifyRow label="Payload Hash" value={receipt.payloadHash} />
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3">
               <a
-                href={`https://sepolia.etherscan.io/tx/${receipt.receiptTxHash}`}
-                target="_blank"
-                rel="noreferrer"
+                href={`https://sepolia.etherscan.io/tx/${receipt.receiptTxHash ?? receipt.ethTxHash}`}
+                target="_blank" rel="noreferrer"
                 className="flex-1 text-center border border-zinc-700 text-zinc-300 font-['Space_Mono'] text-xs py-3 rounded hover:border-[#00ffcc] hover:text-[#00ffcc] transition-colors"
               >
                 View on Etherscan ↗
@@ -231,19 +214,12 @@ export default function Verify() {
                 <span className="text-zinc-400 text-sm">~</span>
               </div>
               <div>
-                <p className="font-['Syne'] font-bold text-zinc-300">
-                  Blob Found (Not a BlobFS Receipt)
-                </p>
-                <p className="font-['Space_Mono'] text-xs text-zinc-500 mt-0.5">
-                  Source: {blobSource}
-                </p>
+                <p className="font-['Syne'] font-bold text-zinc-300">Blob Found (Not a BlobFS Receipt)</p>
+                <p className="font-['Space_Mono'] text-xs text-zinc-500 mt-0.5">Source: {blobSource}</p>
               </div>
             </div>
-
             <div className="border border-zinc-800 rounded-lg p-5 bg-zinc-900/40">
-              <p className="font-['Space_Mono'] text-xs text-zinc-400 mb-3 uppercase tracking-wider">
-                Raw Blob Data
-              </p>
+              <p className="font-['Space_Mono'] text-xs text-zinc-400 mb-3 uppercase tracking-wider">Raw Blob Data</p>
               <pre className="text-xs text-zinc-300 font-['Space_Mono'] overflow-x-auto whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
                 {rawBlob.length > 2000 ? rawBlob.slice(0, 2000) + '\n...(truncated)' : rawBlob}
               </pre>
@@ -251,12 +227,10 @@ export default function Verify() {
           </div>
         )}
 
-        {/* Idle: how it works */}
+        {/* Idle */}
         {state === 'idle' && (
           <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/20">
-            <h2 className="font-['Syne'] text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-              How Verification Works
-            </h2>
+            <h2 className="font-['Syne'] text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">How Verification Works</h2>
             <div className="space-y-3 font-['Space_Mono'] text-xs text-zinc-500">
               <Step n={1} text="Paste the receipt TX hash you received after purchasing a dataset license." />
               <Step n={2} text="BlobFS reads the blob directly from Ethereum blobspace (or archive if >18 days old)." />
@@ -270,50 +244,25 @@ export default function Verify() {
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────
-
-function VerifyRow({
-  label,
-  value,
-  tx = false,
-  address = false,
-  highlight = false,
-  badge = false,
-}: {
-  label: string;
-  value: string;
-  tx?: boolean;
-  address?: boolean;
-  highlight?: boolean;
-  badge?: boolean;
+function VerifyRow({ label, value, tx = false, address = false, highlight = false, badge = false }: {
+  label: string; value: string; tx?: boolean; address?: boolean; highlight?: boolean; badge?: boolean;
 }) {
+  if (!value) return null;
   return (
     <div className="flex items-start justify-between gap-6 py-2 border-b border-zinc-800/60 last:border-0">
       <span className="text-zinc-500 shrink-0 pt-0.5">{label}</span>
       {tx ? (
-        <a
-          href={`https://sepolia.etherscan.io/tx/${value}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]"
-          title={value}
-        >
+        <a href={`https://sepolia.etherscan.io/tx/${value}`} target="_blank" rel="noreferrer"
+          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]" title={value}>
           {value.slice(0, 10)}...{value.slice(-8)}
         </a>
       ) : address ? (
-        <a
-          href={`https://sepolia.etherscan.io/address/${value}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]"
-          title={value}
-        >
+        <a href={`https://sepolia.etherscan.io/address/${value}`} target="_blank" rel="noreferrer"
+          className="text-zinc-300 hover:text-[#00ffcc] transition-colors text-right truncate max-w-[240px]" title={value}>
           {value.slice(0, 10)}...{value.slice(-8)}
         </a>
       ) : badge ? (
-        <span className="border border-[#00ffcc]/50 text-[#00ffcc] rounded px-2 py-0.5 uppercase text-xs">
-          {value}
-        </span>
+        <span className="border border-[#00ffcc]/50 text-[#00ffcc] rounded px-2 py-0.5 uppercase text-xs">{value}</span>
       ) : highlight ? (
         <span className="text-[#00ffcc] font-semibold">{value}</span>
       ) : (
@@ -326,9 +275,7 @@ function VerifyRow({
 function Step({ n, text }: { n: number; text: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="w-5 h-5 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-500 shrink-0 text-xs">
-        {n}
-      </span>
+      <span className="w-5 h-5 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-500 shrink-0 text-xs">{n}</span>
       <span>{text}</span>
     </div>
   );

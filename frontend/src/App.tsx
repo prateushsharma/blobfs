@@ -17,6 +17,7 @@ export default function App() {
         <Route path="/dataset/:id" element={<DatasetDetail />} />
         <Route path="/publish" element={<Publish />} />
         <Route path="/verify/:hash" element={<Verify />} />
+        <Route path="/verify" element={<Verify />} /> 
         <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </div>

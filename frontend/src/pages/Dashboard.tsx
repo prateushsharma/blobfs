@@ -1,371 +1,499 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import axios from 'axios'
-import { useWalletStore } from '../store/useWalletStore'
+import { useState, useEffect, useCallback } from 'react';
+import { useAccount, useDisconnect } from 'wagmi';
+import { Link } from 'react-router-dom';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface MyDataset {
-  id: string
-  name: string
-  content_type: string
-  file_size: number
-  price_wei: string
-  license_type: string
-  manifest_tx_hash: string
-  created_at: number
-  active: number
+interface Dataset {
+  dataset_id: string;
+  name: string;
+  description: string;
+  content_type: string;
+  file_size: number;
+  chunk_count: number;
+  price_wei: string;
+  license_type: string;
+  manifest_tx_hash: string;
+  created_at: number;
+  active: boolean;
 }
 
-interface MyLicense {
-  id: string
-  dataset_id: string
-  receipt_tx_hash: string
-  amount_wei: string
-  purchased_at: number
-  dataset_name?: string
+interface Purchase {
+  dataset_id: string;
+  dataset_name?: string;
+  receipt_tx_hash: string;
+  amount_wei: string;
+  tx_hash: string;
+  purchased_at: number;
+  seller_address?: string;
 }
 
-interface WalletMetrics {
-  totalBlobsWritten: number
-  totalEthSpent: string
-  totalEarned: string
-  datasetsPublished: number
-  licensesOwned: number
+interface Stats {
+  totalDatasets: number;
+  totalEarningsWei: string;
+  totalPurchases: number;
+  totalSpentWei: string;
+  totalBlobs: number;
 }
 
-function formatSize(bytes: number) {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(2)} MB`
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(2)} KB`
-  return `${bytes} B`
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+
+function formatETH(wei: string): string {
+  if (!wei || wei === '0') return '0.000';
+  const eth = Number(BigInt(wei)) / 1e18;
+  return eth.toFixed(4);
 }
 
-function formatEth(wei: string) {
-  return (Number(BigInt(wei)) / 1e18).toFixed(4)
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function timeAgo(ts: number) {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
+function formatDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
 }
 
-const MOCK_DATASETS: MyDataset[] = [
-  {
-    id: '1', name: 'ImageNet Subset 10k', content_type: 'application/zip',
-    file_size: 524288000, price_wei: '5000000000000000', license_type: 'commercial',
-    manifest_tx_hash: '0xabc123def456abc123def456abc123def456abc123def456abc123def456abc123',
-    created_at: Date.now() / 1000 - 86400, active: 1,
-  },
-  {
-    id: '2', name: 'Multilingual NLP Corpus', content_type: 'text/plain',
-    file_size: 890000000, price_wei: '0', license_type: 'open',
-    manifest_tx_hash: '0xdef456abc123def456abc123def456abc123def456abc123def456abc123def456',
-    created_at: Date.now() / 1000 - 259200, active: 1,
-  },
-]
-
-const MOCK_LICENSES: MyLicense[] = [
-  {
-    id: '1', dataset_id: '3', receipt_tx_hash: '0xghi789abc123',
-    amount_wei: '500000000000000000', purchased_at: Date.now() / 1000 - 3600,
-    dataset_name: 'Medical Imaging Dataset',
-  },
-  {
-    id: '2', dataset_id: '4', receipt_tx_hash: '0xjkl012def456',
-    amount_wei: '2000000000000000000', purchased_at: Date.now() / 1000 - 172800,
-    dataset_name: 'GPT Instruction Corpus v2',
-  },
-]
-
-const MOCK_METRICS: WalletMetrics = {
-  totalBlobsWritten: 14,
-  totalEthSpent: '0.0112',
-  totalEarned: '0.0049',
-  datasetsPublished: 2,
-  licensesOwned: 2,
+function truncateHash(hash: string, chars = 6): string {
+  if (!hash) return '';
+  return `${hash.slice(0, chars + 2)}…${hash.slice(-chars)}`;
 }
 
-type Tab = 'overview' | 'datasets' | 'licenses'
+function licenseColor(type?: string): string {
+  const map: Record<string, string> = {
+    commercial: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+    research: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/30',
+    'open-source': 'text-violet-400 bg-violet-400/10 border-violet-400/30',
+    personal: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
+  };
+  return map[type ?? ''] ?? 'text-zinc-400 bg-zinc-400/10 border-zinc-400/30';
+}
 
-export default function Dashboard() {
-  const { address, balance, isConnected, connect } = useWalletStore()
-  const [tab, setTab] = useState<Tab>('overview')
-  const [datasets, setDatasets] = useState<MyDataset[]>([])
-  const [licenses, setLicenses] = useState<MyLicense[]>([])
-  const [metrics, setMetrics] = useState<WalletMetrics | null>(null)
-  const [loading, setLoading] = useState(true)
+// ─── Subcomponents ────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!address) { setLoading(false); return }
+function StatCard({ label, value, sub, accent }: {
+  label: string; value: string; sub?: string; accent?: string;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] p-5 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.04]">
+      {/* Glow dot */}
+      <div className={`absolute top-4 right-4 w-2 h-2 rounded-full ${accent ?? 'bg-cyan-400'} shadow-lg shadow-current opacity-60`} />
+      <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-3">{label}</p>
+      <p className={`text-2xl font-bold font-mono ${accent ? 'text-white' : 'text-white'}`}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-zinc-500 font-mono">{sub}</p>}
+    </div>
+  );
+}
 
-    Promise.all([
-      axios.get(`${API}/api/datasets?creator=${address}`).catch(() => ({ data: { datasets: MOCK_DATASETS } })),
-      axios.get(`${API}/api/licenses/my?address=${address}`).catch(() => ({ data: { licenses: MOCK_LICENSES } })),
-      axios.get(`${API}/api/wallet/metrics?address=${address}`).catch(() => ({ data: MOCK_METRICS })),
-    ]).then(([dRes, lRes, mRes]) => {
-      setDatasets(dRes.data?.datasets || MOCK_DATASETS)
-      setLicenses(lRes.data?.licenses || MOCK_LICENSES)
-      setMetrics(mRes.data || MOCK_METRICS)
-    }).finally(() => setLoading(false))
-  }, [address])
-
-  if (!isConnected) {
-    return (
-      <main className="pt-24 pb-16 px-6 min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-sm fade-in">
-          <div className="font-mono text-4xl text-border mb-4">⬡</div>
-          <h2 className="font-sans font-bold text-2xl mb-3">Connect your wallet</h2>
-          <p className="font-mono text-sm text-dim mb-6">
-            Connect to view your published datasets, purchased licenses, and earnings.
-          </p>
-          <button
-            onClick={connect}
-            className="font-mono text-sm tracking-widest uppercase px-8 py-3 border border-cyan text-cyan hover:bg-cyan hover:text-bg transition-all duration-200 glow-cyan"
-          >
-            connect wallet
-          </button>
-        </div>
-      </main>
-    )
-  }
+function DatasetRow({ dataset }: { dataset: Dataset }) {
+  const blobscanUrl = `https://sepolia.blobscan.com/tx/${dataset.manifest_tx_hash}`;
 
   return (
-    <main className="pt-24 pb-16 px-6 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div className="group grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-4 rounded-xl border border-white/5 bg-white/[0.02] transition-all duration-200 hover:border-white/10 hover:bg-white/[0.035]">
+      {/* Name + meta */}
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <p className="text-sm font-medium text-white truncate">{dataset.name}</p>
+          {!dataset.active && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-red-400">
+              INACTIVE
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-zinc-500 truncate font-mono">{dataset.dataset_id}</p>
+      </div>
 
-        {/* Header */}
-        <div className="mb-10 fade-in">
-          <span className="font-mono text-xs text-dim tracking-widest uppercase">// dashboard</span>
-          <div className="flex items-start justify-between mt-2">
-            <div>
-              <h1 className="font-sans font-extrabold text-4xl md:text-5xl">
-                My <span className="text-cyan">BlobFS</span>
-              </h1>
-              <div className="flex items-center gap-3 mt-2">
-                <span className="font-mono text-xs text-dim">{address}</span>
-                <span className="font-mono text-xs text-cyan">{balance} ETH</span>
-              </div>
+      {/* Size */}
+      <div className="text-right">
+        <p className="text-xs font-mono text-zinc-300">{formatFileSize(dataset.file_size)}</p>
+        <p className="text-[10px] text-zinc-600 font-mono">{dataset.chunk_count} blobs</p>
+      </div>
+
+      {/* License */}
+      <span className={`text-[10px] font-mono px-2 py-1 rounded border ${licenseColor(dataset.license_type ?? dataset.license ?? '')}`}>
+        {(dataset.license_type ?? dataset.license ?? 'unknown').toUpperCase()}
+      </span>
+
+      {/* Price */}
+      <div className="text-right">
+        <p className="text-sm font-mono text-cyan-400">{formatETH(dataset.price_wei)} ETH</p>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <a
+          href={blobscanUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-mono px-2 py-1 rounded border border-white/10 text-zinc-400 hover:text-white hover:border-white/30 transition-colors"
+        >
+          BLOB ↗
+        </a>
+        <Link
+          to={`/dataset/${dataset.dataset_id}`}
+          className="text-[10px] font-mono px-2 py-1 rounded border border-cyan-400/20 text-cyan-400 hover:bg-cyan-400/10 transition-colors"
+        >
+          VIEW
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function PurchaseRow({ purchase }: { purchase: Purchase }) {
+  const receiptUrl = `https://sepolia.blobscan.com/tx/${purchase.receipt_tx_hash}`;
+  const txUrl = `https://sepolia.etherscan.io/tx/${purchase.tx_hash}`;
+
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-4 rounded-xl border border-white/5 bg-white/[0.02] transition-all duration-200 hover:border-white/10 hover:bg-white/[0.035]">
+      {/* Dataset info */}
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-white truncate mb-1">
+          {purchase.dataset_name ?? purchase.dataset_id}
+        </p>
+        <p className="text-[10px] font-mono text-zinc-500">
+          {formatDate(purchase.purchased_at)} · {truncateHash(purchase.dataset_id)}
+        </p>
+      </div>
+
+      {/* Amount */}
+      <div className="text-right">
+        <p className="text-sm font-mono text-emerald-400">{formatETH(purchase.amount_wei)} ETH</p>
+        <p className="text-[10px] text-zinc-600 font-mono">paid</p>
+      </div>
+
+      {/* Receipt blob link */}
+      <a
+        href={receiptUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] font-mono px-2 py-1 rounded border border-white/10 text-zinc-400 hover:text-white hover:border-white/30 transition-colors whitespace-nowrap"
+      >
+        RECEIPT ↗
+      </a>
+
+      {/* Etherscan tx */}
+      <a
+        href={txUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] font-mono px-2 py-1 rounded border border-cyan-400/20 text-cyan-400 hover:bg-cyan-400/10 transition-colors whitespace-nowrap"
+      >
+        TX ↗
+      </a>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, sub, action }: {
+  icon: string; title: string; sub: string; action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="text-4xl mb-4 opacity-30">{icon}</div>
+      <p className="text-sm font-medium text-zinc-400 mb-1">{title}</p>
+      <p className="text-xs text-zinc-600 font-mono mb-4">{sub}</p>
+      {action}
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+
+type Tab = 'datasets' | 'purchases';
+
+export default function Dashboard() {
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+
+  const [tab, setTab] = useState<Tab>('datasets');
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Fetch data ──────────────────────────────────────────────────────────────
+  const fetchDashboard = useCallback(async () => {
+    if (!address) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [datasetsRes, purchasesRes] = await Promise.allSettled([
+        fetch(`${API}/api/datasets?creator=${address}`),
+        fetch(`${API}/api/licenses/my?address=${address}`),
+      ]);
+
+      let myDatasets: Dataset[] = [];
+      let myPurchases: Purchase[] = [];
+
+      if (datasetsRes.status === 'fulfilled' && datasetsRes.value.ok) {
+        const json = await datasetsRes.value.json();
+        const rawD = json.datasets ?? json.data ?? json;
+        const arr: any[] = Array.isArray(rawD) ? rawD : [];
+        myDatasets = arr.map((d: any) => ({
+          ...d,
+          license_type: d.license_type ?? d.license ?? 'unknown',
+          price_wei: d.price_wei ?? d.priceWei ?? '0',
+          file_size: d.file_size ?? d.fileSize ?? 0,
+          chunk_count: d.chunk_count ?? d.chunkCount ?? 0,
+          manifest_tx_hash: d.manifest_tx_hash ?? d.manifestTxHash ?? '',
+          created_at: d.created_at ?? d.createdAt ?? 0,
+        }));
+      }
+
+      if (purchasesRes.status === 'fulfilled' && purchasesRes.value.ok) {
+        const json = await purchasesRes.value.json();
+        const rawP = json.licenses ?? json.purchases ?? json.data ?? json;
+        const arrP: any[] = Array.isArray(rawP) ? rawP : [];
+        myPurchases = arrP.map((p: any) => ({
+          ...p,
+          dataset_id: p.dataset_id ?? p.datasetId ?? '',
+          receipt_tx_hash: p.receipt_tx_hash ?? p.receiptTxHash ?? '',
+          amount_wei: p.amount_wei ?? p.amountWei ?? p.amount ?? '0',
+          tx_hash: p.tx_hash ?? p.txHash ?? '',
+          purchased_at: p.purchased_at ?? p.purchasedAt ?? 0,
+          dataset_name: p.dataset_name ?? p.datasetName ?? p.name,
+        }));
+      }
+
+      setDatasets(myDatasets);
+      setPurchases(myPurchases);
+
+      // Compute stats client-side
+      const totalEarnings = myDatasets.reduce((acc, d) => {
+        // We'd ideally fetch per-dataset sales; for now show 0 until backend provides it
+        return acc;
+      }, 0n);
+
+      const totalSpent = myPurchases.reduce(
+        (acc, p) => acc + BigInt(p.amount_wei ?? '0'),
+        0n
+      );
+
+      const totalBlobs = myDatasets.reduce((acc, d) => acc + (d.chunk_count ?? 0), 0);
+
+      setStats({
+        totalDatasets: myDatasets.length,
+        totalEarningsWei: totalEarnings.toString(),
+        totalPurchases: myPurchases.length,
+        totalSpentWei: totalSpent.toString(),
+        totalBlobs,
+      });
+    } catch (err: any) {
+      setError(err.message ?? 'Failed to load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  // ── Not connected ───────────────────────────────────────────────────────────
+  if (!isConnected || !address) {
+    return (
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl border border-white/10 bg-white/[0.03] flex items-center justify-center mx-auto mb-6">
+            <svg className="w-7 h-7 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a5 5 0 00-10 0v2M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <p className="text-white font-medium mb-2">Connect your wallet</p>
+          <p className="text-sm text-zinc-500 font-mono">to view your dashboard</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+          <span className="text-sm font-mono text-zinc-400">loading dashboard…</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main ────────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#080808] text-white">
+      {/* Subtle grid background */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.015]"
+        style={{
+          backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`,
+          backgroundSize: '48px 48px',
+        }}
+      />
+
+      <div className="relative max-w-5xl mx-auto px-6 py-12">
+
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between mb-10">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">BlobFS</span>
+              <span className="text-zinc-700">/</span>
+              <span className="text-[10px] font-mono text-cyan-500 uppercase tracking-widest">Dashboard</span>
             </div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {truncateHash(address, 4)}
+            </h1>
+            <p className="mt-1 text-xs font-mono text-zinc-500">{address}</p>
+          </div>
+
+          <div className="flex items-center gap-3">
             <Link
               to="/publish"
-              className="hidden md:block font-mono text-xs tracking-widest uppercase px-4 py-2 bg-cyan text-bg font-bold hover:opacity-90 transition-opacity"
+              className="text-xs font-mono px-4 py-2 rounded-lg border border-cyan-400/30 bg-cyan-400/5 text-cyan-400 hover:bg-cyan-400/15 transition-colors"
             >
-              + publish dataset
+              + PUBLISH DATASET
             </Link>
+            <button
+              onClick={() => disconnect()}
+              className="text-xs font-mono px-3 py-2 rounded-lg border border-white/10 text-zinc-500 hover:text-white hover:border-white/20 transition-colors"
+            >
+              DISCONNECT
+            </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0 border-b border-border mb-8 fade-in">
-          {(['overview', 'datasets', 'licenses'] as Tab[]).map(t => (
+        {/* ── Error banner ───────────────────────────────────────────── */}
+        {error && (
+          <div className="mb-6 px-4 py-3 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 text-xs font-mono">
+            ⚠ {error}
+          </div>
+        )}
+
+        {/* ── Stats row ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
+          <StatCard key="datasets" label="Datasets Published" value={stats?.totalDatasets.toString() ?? '0'} sub={`${stats?.totalBlobs ?? 0} blobs on Ethereum`} accent="bg-cyan-400" />
+          <StatCard key="earnings" label="Total Earnings" value={`${formatETH(stats?.totalEarningsWei ?? '0')} ETH`} sub="from dataset sales" accent="bg-emerald-400" />
+          <StatCard key="purchases" label="Licenses Purchased" value={stats?.totalPurchases.toString() ?? '0'} sub="datasets licensed" accent="bg-violet-400" />
+          <StatCard key="spent" label="Total Spent" value={`${formatETH(stats?.totalSpentWei ?? '0')} ETH`} sub="on licensing" accent="bg-amber-400" />
+        </div>
+
+        {/* ── Tabs ───────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-1 mb-6 border-b border-white/5 pb-0">
+          {(['datasets', 'purchases'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`font-mono text-xs tracking-widest uppercase px-6 py-3 border-b-2 transition-all duration-200 ${
-                tab === t
-                  ? 'border-cyan text-cyan'
-                  : 'border-transparent text-dim hover:text-text'
+              className={`relative px-4 pb-4 text-xs font-mono uppercase tracking-widest transition-colors ${
+                tab === t ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'
               }`}
             >
-              {t}
-              {t === 'datasets' && datasets.length > 0 && (
-                <span className="ml-2 font-mono text-xs bg-surface px-1.5 py-0.5 text-dim">{datasets.length}</span>
-              )}
-              {t === 'licenses' && licenses.length > 0 && (
-                <span className="ml-2 font-mono text-xs bg-surface px-1.5 py-0.5 text-dim">{licenses.length}</span>
+              {t === 'datasets' ? `My Datasets (${datasets.length})` : `My Purchases (${purchases.length})`}
+              {tab === t && (
+                <span className="absolute bottom-0 left-0 right-0 h-px bg-cyan-400" />
               )}
             </button>
           ))}
+
+          {/* Refresh */}
+          <button
+            onClick={fetchDashboard}
+            className="ml-auto mb-4 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            ↻ REFRESH
+          </button>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border animate-pulse">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-bg p-6 h-24" />
-            ))}
+        {/* ── Datasets tab ───────────────────────────────────────────── */}
+        {tab === 'datasets' && (
+          <div className="space-y-2">
+            {datasets.length === 0 ? (
+              <EmptyState
+                icon="📦"
+                title="No datasets published yet"
+                sub="upload a dataset to start earning"
+                action={
+                  <Link
+                    to="/publish"
+                    className="text-xs font-mono px-4 py-2 rounded-lg border border-cyan-400/30 bg-cyan-400/5 text-cyan-400 hover:bg-cyan-400/15 transition-colors"
+                  >
+                    PUBLISH YOUR FIRST DATASET →
+                  </Link>
+                }
+              />
+            ) : (
+              <>
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-5 py-2 text-[10px] font-mono uppercase tracking-widest text-zinc-600">
+                  <span>Dataset</span>
+                  <span className="text-right">Size</span>
+                  <span>License</span>
+                  <span className="text-right">Price</span>
+                  <span>Actions</span>
+                </div>
+                {datasets.map((d) => (
+                  <DatasetRow key={d.dataset_id} dataset={d} />
+                ))}
+              </>
+            )}
           </div>
-        ) : (
-          <>
-            {/* Overview Tab */}
-            {tab === 'overview' && metrics && (
-              <div className="space-y-8 fade-in">
-
-                {/* Metrics grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
-                  {[
-                    { label: 'Datasets Published', value: metrics.datasetsPublished.toString(), accent: false },
-                    { label: 'Licenses Owned', value: metrics.licensesOwned.toString(), accent: false },
-                    { label: 'ETH Earned', value: `${metrics.totalEarned} ETH`, accent: true },
-                    { label: 'Blobs Written', value: metrics.totalBlobsWritten.toString(), accent: false },
-                  ].map(({ label, value, accent }) => (
-                    <div key={label} className="bg-bg p-6">
-                      <div className={`font-mono text-2xl font-bold mb-1 ${accent ? 'text-cyan glow-cyan-text' : 'text-text'}`}>
-                        {value}
-                      </div>
-                      <div className="font-mono text-xs text-dim tracking-widest uppercase">{label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* ETH activity */}
-                <div className="border border-border bg-surface p-6">
-                  <span className="font-mono text-xs text-dim tracking-widest uppercase block mb-4">// eth activity</span>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {[
-                      { label: 'Upload costs (blob gas)', value: `${metrics.totalEthSpent} ETH`, dim: true },
-                      { label: 'Licensing revenue', value: `${metrics.totalEarned} ETH`, dim: false },
-                      { label: 'Protocol fees paid', value: `${(parseFloat(metrics.totalEthSpent) * 0.025).toFixed(6)} ETH`, dim: true },
-                    ].map(({ label, value, dim }) => (
-                      <div key={label}>
-                        <div className="font-mono text-xs text-dim mb-1">{label}</div>
-                        <div className={`font-mono text-lg font-bold ${dim ? 'text-text' : 'text-cyan'}`}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quick links */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border">
-                  <div className="bg-bg p-6">
-                    <span className="font-mono text-xs text-dim tracking-widest uppercase block mb-4">// recent datasets</span>
-                    {datasets.slice(0, 3).map(d => (
-                      <Link key={d.id} to={`/dataset/${d.id}`} className="flex items-center justify-between py-2 hover:text-cyan transition-colors group">
-                        <span className="font-sans text-sm group-hover:text-cyan transition-colors truncate max-w-xs">{d.name}</span>
-                        <span className="font-mono text-xs text-dim shrink-0 ml-2">{timeAgo(d.created_at)}</span>
-                      </Link>
-                    ))}
-                    {datasets.length === 0 && (
-                      <p className="font-mono text-xs text-dim">no datasets yet</p>
-                    )}
-                  </div>
-                  <div className="bg-bg p-6">
-                    <span className="font-mono text-xs text-dim tracking-widest uppercase block mb-4">// recent licenses</span>
-                    {licenses.slice(0, 3).map(l => (
-                      <Link key={l.id} to={`/verify/${l.receipt_tx_hash}`} className="flex items-center justify-between py-2 hover:text-cyan transition-colors group">
-                        <span className="font-sans text-sm group-hover:text-cyan transition-colors truncate max-w-xs">{l.dataset_name || l.dataset_id}</span>
-                        <span className="font-mono text-xs text-cyan shrink-0 ml-2">{formatEth(l.amount_wei)} ETH</span>
-                      </Link>
-                    ))}
-                    {licenses.length === 0 && (
-                      <p className="font-mono text-xs text-dim">no licenses yet</p>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* Datasets Tab */}
-            {tab === 'datasets' && (
-              <div className="fade-in">
-                {datasets.length === 0 ? (
-                  <div className="border border-border p-16 text-center">
-                    <p className="font-mono text-dim text-sm mb-4">no datasets published yet</p>
-                    <Link to="/publish" className="font-mono text-xs text-cyan hover:underline">publish your first dataset →</Link>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-px bg-border">
-                    {datasets.map(d => (
-                      <div key={d.id} className="bg-bg p-6 hover:bg-surface transition-colors group">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className={`font-mono text-xs px-2 py-0.5 border ${
-                                d.license_type === 'commercial' ? 'border-cyan/40 text-cyan'
-                                : d.license_type === 'research' ? 'border-amber/40 text-amber'
-                                : 'border-border text-dim'
-                              }`}>{d.license_type}</span>
-                              <span className={`font-mono text-xs ${d.active ? 'text-cyan' : 'text-dim'}`}>
-                                {d.active ? '● active' : '○ inactive'}
-                              </span>
-                              <span className="font-mono text-xs text-dim">{timeAgo(d.created_at)}</span>
-                            </div>
-                            <h3 className="font-sans font-bold text-lg mb-1 group-hover:text-cyan transition-colors">{d.name}</h3>
-                            <div className="flex gap-4">
-                              <span className="font-mono text-xs text-dim">{formatSize(d.file_size)}</span>
-                              <span className="font-mono text-xs text-dim">{d.content_type.split('/')[1]}</span>
-                            </div>
-                            <div className="font-mono text-xs text-dim mt-2 truncate">{d.manifest_tx_hash}</div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="font-mono text-lg font-bold text-cyan">
-                              {d.license_type === 'open' ? 'FREE' : `${formatEth(d.price_wei)} ETH`}
-                            </div>
-                            <Link
-                              to={`/dataset/${d.id}`}
-                              className="font-mono text-xs text-dim hover:text-cyan transition-colors mt-1 block"
-                            >
-                              view →
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Licenses Tab */}
-            {tab === 'licenses' && (
-              <div className="fade-in">
-                {licenses.length === 0 ? (
-                  <div className="border border-border p-16 text-center">
-                    <p className="font-mono text-dim text-sm mb-4">no licenses purchased yet</p>
-                    <Link to="/marketplace" className="font-mono text-xs text-cyan hover:underline">browse marketplace →</Link>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-px bg-border">
-                    {licenses.map(l => (
-                      <div key={l.id} className="bg-bg p-6 hover:bg-surface transition-colors group">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-sans font-bold text-lg mb-2 group-hover:text-cyan transition-colors">
-                              {l.dataset_name || l.dataset_id}
-                            </h3>
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="flex items-center gap-1 font-mono text-xs text-cyan">
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan" />
-                                licensed
-                              </span>
-                              <span className="font-mono text-xs text-dim">{timeAgo(l.purchased_at)}</span>
-                            </div>
-                            <div className="font-mono text-xs text-dim truncate">receipt: {l.receipt_tx_hash}</div>
-                          </div>
-                          <div className="text-right shrink-0 space-y-2">
-                            <div className="font-mono text-lg font-bold text-cyan">
-                              {formatEth(l.amount_wei)} ETH
-                            </div>
-                            <div className="flex gap-2">
-                              <Link
-                                to={`/dataset/${l.dataset_id}`}
-                                className="font-mono text-xs text-dim hover:text-cyan transition-colors"
-                              >
-                                dataset →
-                              </Link>
-                              <span className="text-border">|</span>
-                              <Link
-                                to={`/verify/${l.receipt_tx_hash}`}
-                                className="font-mono text-xs text-dim hover:text-cyan transition-colors"
-                              >
-                                receipt →
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
         )}
 
+        {/* ── Purchases tab ──────────────────────────────────────────── */}
+        {tab === 'purchases' && (
+          <div className="space-y-2">
+            {purchases.length === 0 ? (
+              <EmptyState
+                icon="🔑"
+                title="No licenses purchased yet"
+                sub="browse the marketplace to find datasets"
+                action={
+                  <Link
+                    to="/marketplace"
+                    className="text-xs font-mono px-4 py-2 rounded-lg border border-cyan-400/30 bg-cyan-400/5 text-cyan-400 hover:bg-cyan-400/15 transition-colors"
+                  >
+                    BROWSE MARKETPLACE →
+                  </Link>
+                }
+              />
+            ) : (
+              <>
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-2 text-[10px] font-mono uppercase tracking-widest text-zinc-600">
+                  <span>Dataset</span>
+                  <span className="text-right">Amount</span>
+                  <span>Receipt Blob</span>
+                  <span>Payment Tx</span>
+                </div>
+                {purchases.map((p) => (
+                  <PurchaseRow key={`${p.dataset_id}-${p.receipt_tx_hash}`} purchase={p} />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Footer ─────────────────────────────────────────────────── */}
+        <div className="mt-16 pt-6 border-t border-white/5 flex items-center justify-between">
+          <p className="text-[10px] font-mono text-zinc-700">
+            BlobFS · AI Dataset Licensing on Ethereum Blobspace
+          </p>
+          <a
+            href={`https://sepolia.etherscan.io/address/${address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] font-mono text-zinc-700 hover:text-zinc-500 transition-colors"
+          >
+            VIEW ON ETHERSCAN ↗
+          </a>
+        </div>
       </div>
-    </main>
-  )
+    </div>
+  );
 }

@@ -14,11 +14,11 @@ export interface GasEstimate {
 }
 
 // GET /api/blobs/:txHash
-export async function readBlob(txHash: string): Promise<{ data: string; source: string }> {
+export async function readBlob(txHash: string): Promise<{ data: any; source: string }> {
   const { data } = await api.get(`/api/blobs/${txHash}`);
-  return data;
+  // backend returns decoded data directly — no base64
+  return { data: data.data, source: data.source };
 }
-
 // GET /api/blobs/:txHash/status
 export async function getBlobStatus(txHash: string): Promise<BlobStatus> {
   const { data } = await api.get(`/api/blobs/${txHash}/status`);

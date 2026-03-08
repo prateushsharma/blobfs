@@ -14,31 +14,40 @@ export interface LicenseReceipt {
   receiptTxHash: string;
 }
 
-export interface PurchasePayload {
+export async function prepareLicense(payload: {
   datasetId: string;
   buyerAddress: string;
-  paymentTxHash: string;
-}
-
-// POST /api/licenses/purchase
-export async function purchaseLicense(payload: PurchasePayload): Promise<{ receiptTxHash: string }> {
-  const { data } = await api.post('/api/licenses/purchase', payload);
+}): Promise<{ receiptTxHash: string; priceWei: string; datasetId: string }> {
+  const { data } = await api.post('/api/licenses/prepare', payload);
   return data;
 }
 
-// GET /api/licenses/verify?datasetId=X&address=Y
+export async function confirmLicense(payload: {
+  datasetId: string;
+  buyerAddress: string;
+  paymentTxHash: string;
+  receiptTxHash: string;
+}): Promise<{ success: boolean; receiptTxHash: string; licenseType: string }> {
+  const { data } = await api.post('/api/licenses/confirm', payload);
+  return data;
+}
+
 export async function verifyLicense(
   datasetId: string,
   address: string
 ): Promise<{ licensed: boolean; receipt: LicenseReceipt | null }> {
-  const { data } = await api.get('/api/licenses/verify', {
-    params: { datasetId, address },
-  });
+  const { data } = await api.get('/api/licenses/verify', { params: { datasetId, address } });
   return data;
 }
 
-// GET /api/licenses/my
 export async function myLicenses(): Promise<LicenseReceipt[]> {
   const { data } = await api.get('/api/licenses/my');
+  return data;
+}
+
+export async function getLicenseStats(
+  datasetId: string
+): Promise<{ licenseCount: number; totalEarningsWei: string; totalEarningsETH: string }> {
+  const { data } = await api.get(`/api/licenses/stats/${datasetId}`);
   return data;
 }

@@ -313,3 +313,48 @@
 2026-03-07T13:50:01.392Z [INFO] metric {"type":"read","size":0,"duration":2209,"success":false,"source":"error"}
 2026-03-07T13:50:01.392Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
 2026-03-07T13:50:01.392Z [ERROR] Blob read failed {"error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
+2026-03-08T07:58:25.559Z [INFO] Config validated 
+2026-03-08T07:58:25.570Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-08T07:58:25.570Z [INFO] Database initialized 
+2026-03-08T07:58:25.570Z [INFO] Initializing KZG... 
+2026-03-08T07:58:40.957Z [INFO] Creating BlobKit instance... 
+2026-03-08T07:58:41.533Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088731377698385156 ETH","chainId":11155111}
+2026-03-08T07:58:41.533Z [INFO] BlobKit initialized 
+2026-03-08T07:58:41.535Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-08T07:59:28.374Z [INFO] Chunk uploaded {"chunkIndex":0,"total":1,"txHash":"0xe76b6c6eb2368867d8421a32c7bef665ad763919fd04b7eb056860d9faf8f730","payloadHash":"0xad9c56bd8429bf12f17b6aada2d82c559b8a02cfd67e5b237ae1c827879f7986"}
+2026-03-08T07:59:39.605Z [INFO] Dataset uploaded {"datasetId":"c5261abe-3f85-4f8c-b339-28313335e505","manifestTxHash":"0x3da22a360d5811718a48c35ea7d37cc8900ff827f9f7efb30afbd71e6d2a81fa","payloadHash":"0xad9c56bd8429bf12f17b6aada2d82c559b8a02cfd67e5b237ae1c827879f7986"}
+2026-03-08T07:59:39.668Z [INFO] Dataset published {"datasetId":"c5261abe-3f85-4f8c-b339-28313335e505","manifestTxHash":"0x3da22a360d5811718a48c35ea7d37cc8900ff827f9f7efb30afbd71e6d2a81fa"}
+2026-03-08T11:24:02.622Z [INFO] metric {"type":"read","size":0,"duration":1885,"success":false,"source":"error"}
+2026-03-08T11:24:02.623Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x017ffc674113111d0a130475055009b9ea85e5cb56a6b4abd8b742bc1ea3b746"}
+2026-03-08T11:24:02.623Z [WARN] Could not fetch receipt blob {"txHash":"0xc143b137e32246a3980d7fa7a42c8ada85367fab235be2fbe103cc242c65f821"}
+2026-03-08T11:24:02.625Z [WARN] On-chain verification failed {"error":"Cannot convert f85ac01f-76a5-49ea-8640-ef911b971597 to a BigInt"}
+2026-03-08T11:24:02.626Z [INFO] metric {"type":"read","size":0,"duration":1902,"success":false,"source":"error"}
+2026-03-08T11:24:02.627Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x017ffc674113111d0a130475055009b9ea85e5cb56a6b4abd8b742bc1ea3b746"}
+2026-03-08T11:24:02.627Z [WARN] Could not fetch receipt blob {"txHash":"0xc143b137e32246a3980d7fa7a42c8ada85367fab235be2fbe103cc242c65f821"}
+2026-03-08T11:24:02.627Z [WARN] On-chain verification failed {"error":"Cannot convert f85ac01f-76a5-49ea-8640-ef911b971597 to a BigInt"}
+2026-03-08T11:25:10.686Z [INFO] Config validated 
+2026-03-08T11:25:10.691Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-08T11:25:10.691Z [INFO] Database initialized 
+2026-03-08T11:25:10.691Z [INFO] Initializing KZG... 
+2026-03-08T11:25:26.060Z [INFO] Creating BlobKit instance... 
+2026-03-08T11:25:26.240Z [INFO] Config validated 
+2026-03-08T11:25:26.243Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-08T11:25:26.243Z [INFO] Database initialized 
+2026-03-08T11:25:26.243Z [INFO] Initializing KZG... 
+2026-03-08T11:25:41.486Z [INFO] Creating BlobKit instance... 
+2026-03-08T11:25:41.869Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088706541271502428 ETH","chainId":11155111}
+2026-03-08T11:25:41.869Z [INFO] BlobKit initialized 
+2026-03-08T11:25:41.871Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}
+2026-03-08T11:26:50.562Z [INFO] Config validated 
+2026-03-08T11:26:50.565Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-08T11:26:50.565Z [INFO] Database initialized 
+2026-03-08T11:26:50.565Z [INFO] Initializing KZG... 
+2026-03-08T11:27:05.901Z [INFO] Creating BlobKit instance... 
+2026-03-08T11:27:06.084Z [INFO] Config validated 
+2026-03-08T11:27:06.087Z [INFO] SQLite database initialized {"path":"./data/blobfs.db"}
+2026-03-08T11:27:06.087Z [INFO] Database initialized 
+2026-03-08T11:27:06.087Z [INFO] Initializing KZG... 
+2026-03-08T11:27:21.367Z [INFO] Creating BlobKit instance... 
+2026-03-08T11:27:21.754Z [INFO] BlobKit initialized {"address":"0x313a132F028422c2553aacD22bE55c06134AfaC8","balance":"0.088706541271502428 ETH","chainId":11155111}
+2026-03-08T11:27:21.754Z [INFO] BlobKit initialized 
+2026-03-08T11:27:21.755Z [INFO] BlobFS backend running {"port":3000,"chainId":11155111,"proxy":""}

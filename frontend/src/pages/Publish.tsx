@@ -141,6 +141,7 @@ export default function Publish() {
       const priceWei = BigInt(Math.round(parseFloat(form.priceETH) * 1e18)).toString();
 
       const { datasetId: did } = await publishDataset({
+        datasetId: result.datasetId,
         manifestTxHash: result.manifestTxHash,
         priceWei,
         licenseType: form.licenseType,

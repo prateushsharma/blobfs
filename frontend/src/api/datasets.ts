@@ -24,6 +24,7 @@ export interface UploadEstimate {
 }
 
 export interface PublishPayload {
+     datasetId: string; 
   manifestTxHash: string;
   priceWei: string;
   licenseType: string;
@@ -54,7 +55,7 @@ export async function uploadDataset(
   file: File,
   meta: { name: string; description: string; priceWei: string; licenseType: string },
   onProgress?: (pct: number) => void
-): Promise<{ manifestTxHash: string; chunkTxHashes: string[]; fileHash: string; estimatedETH: string }> {
+): Promise<{ atasetId: string; manifestTxHash: string; chunkTxHashes: string[]; fileHash: string; estimatedETH: string }> {
   const form = new FormData();
   form.append('file', file);
   form.append('name', meta.name);

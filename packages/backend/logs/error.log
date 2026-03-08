@@ -24,3 +24,5 @@
 2026-03-07T13:46:57.425Z [ERROR] Blob read failed {"error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
 2026-03-07T13:50:01.392Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
 2026-03-07T13:50:01.392Z [ERROR] Blob read failed {"error":"Blob not found: 0x01f779c257cbe2fee70195159290e9a097a4e8df71f275f556aff3526c4130c0"}
+2026-03-08T11:24:02.623Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x017ffc674113111d0a130475055009b9ea85e5cb56a6b4abd8b742bc1ea3b746"}
+2026-03-08T11:24:02.627Z [ERROR] BlobKit error {"context":"readBlob","error":"Blob not found: 0x017ffc674113111d0a130475055009b9ea85e5cb56a6b4abd8b742bc1ea3b746"}
